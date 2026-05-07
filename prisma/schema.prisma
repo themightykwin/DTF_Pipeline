@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Shopify merchant store ────────────────────────────────────────────────
+model Shop {
+  id                  String    @id @default(cuid())
+  shopDomain          String    @unique
+  accessTokenEncrypted String
+  scopes              String
+  installedAt         DateTime  @default(now())
+  uninstalledAt       DateTime?
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  settings            ShopSettings?
+  shopCustomers       ShopCustomer[]
+  shopifyProducts     ShopifyProduct[]
+  draftOrders         DraftOrder[]
+  orders              Order[]
+  webhookEvents       WebhookEvent[]
+  auditLogs           AuditLog[]
+
+  @@map("shops")
+}
+
+// ─── Per-store app configuration ──────────────────────────────────────────
+model ShopSettings {
+  id                    String  @id @default(cuid())
+  shopId                String  @unique
+  shop                  Shop    @relation(fields: [shopId], references: [id])
+  orderMode             String  @default("draft_order") // draft_order | checkout
+  defaultCurrency       String  @default("USD")
+  productVisibilityMode String  @default("hidden")      // hidden | tag_gated
+  themeExtensionEnabled Boolean @default(false)
+
+  @@map("shop_settings")
+}
+
+// ─── Buyer accounts in your web app ───────────────────────────────────────
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  status       String    @default("active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  shopCustomers ShopCustomer[]
+  artUploads    ArtUpload[]
+  configurations ProductConfiguration[]
+  draftOrders   DraftOrder[]
+
+  @@map("users")
+}
+
+// ─── Mapping buyer → Shopify customer ─────────────────────────────────────
+model ShopCustomer {
+  id                    String  @id @default(cuid())
+  shopId                String
+  userId                String
+  shop                  Shop    @relation(fields: [shopId], references: [id])
+  user                  User    @relation(fields: [userId], references: [id])
+  shopifyCustomerId     String
+  companyName           String?
+  customerTagsSnapshot  String?
+  createdAt             DateTime @default(now())
+
+  @@unique([shopId, userId])
+  @@map("shop_customers")
+}
+
+// ─── Garment types and print rules ────────────────────────────────────────
+model GarmentTemplate {
+  id               String  @id @default(cuid())
+  garmentType      String  // tshirt | hoodie | crewneck
+  label            String
+  availableSizes   String  // JSON array e.g. ["XXS","XS","S","M","L","XL","2X","3X","4X","5X"]
+  maxPrintWidthIn  Float
+  maxPrintHeightIn Float
+  minDpi           Int     @default(300)
+  mockupAssetUrl   String?
+  isActive         Boolean @default(true)
+
+  configurations   ProductConfiguration[]
+
+  @@map("garment_templates")
+}
+
+// ─── Artwork uploads ───────────────────────────────────────────────────────
+model ArtUpload {
+  id               String  @id @default(cuid())
+  userId           String
+  user             User    @relation(fields: [userId], references: [id])
+  originalFilename String
+  mimeType         String
+  widthPx          Int
+  heightPx         Int
+  hasTransparency  Boolean @default(false)
+  storageUrl       String
+  cloudinaryId     String?
+  validationStatus String  @default("pending") // pending | pass | warn | fail
+  validationJson   String? // JSON blob of full validation result
+  createdAt        DateTime @default(now())
+
+  configurations   ProductConfiguration[]
+
+  @@map("art_uploads")
+}
+
+// ─── Customer product configurations ──────────────────────────────────────
+model ProductConfiguration {
+  id                String  @id @default(cuid())
+  shopId            String
+  userId            String
+  garmentTemplateId String
+  artUploadId       String?
+  configJson        String  // Full builder payload
+  configHash        String  // SHA256 of normalised config for dedup
+  priceSnapshot     Float?
+  scalePercent      Int     @default(84)
+  yPercent          Int     @default(42)
+  status            String  @default("draft") // draft | approved | archived
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User            @relation(fields: [userId], references: [id])
+  garmentTemplate   GarmentTemplate @relation(fields: [garmentTemplateId], references: [id])
+  artUpload         ArtUpload?      @relation(fields: [artUploadId], references: [id])
+  shopifyProduct    ShopifyProduct?
+  draftOrders       DraftOrder[]
+
+  @@map("product_configurations")
+}
+
+// ─── Shopify product/variant mapping ──────────────────────────────────────
+model ShopifyProduct {
+  id                  String  @id @default(cuid())
+  shopId              String
+  configurationId     String  @unique
+  shop                Shop    @relation(fields: [shopId], references: [id])
+  configuration       ProductConfiguration @relation(fields: [configurationId], references: [id])
+  shopifyProductId    String
+  shopifyVariantId    String
+  metafieldNamespace  String  @default("dtf_pipeline")
+  metafieldKey        String  @default("configuration_id")
+  visibilityStatus    String  @default("hidden") // hidden | active | archived
+  syncedAt            DateTime @default(now())
+
+  @@map("shopify_products")
+}
+
+// ─── Draft orders ──────────────────────────────────────────────────────────
+model DraftOrder {
+  id                  String    @id @default(cuid())
+  shopId              String
+  userId              String
+  configurationId     String
+  shop                Shop      @relation(fields: [shopId], references: [id])
+  user                User      @relation(fields: [userId], references: [id])
+  configuration       ProductConfiguration @relation(fields: [configurationId], references: [id])
+  shopifyDraftOrderId String
+  invoiceUrl          String?
+  status              String    @default("open") // open | invoice_sent | completed | cancelled
+  totalPrice          Float?
+  currency            String    @default("USD")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  order               Order?
+
+  @@map("draft_orders")
+}
+
+// ─── Completed orders ──────────────────────────────────────────────────────
+model Order {
+  id                String    @id @default(cuid())
+  shopId            String
+  draftOrderId      String    @unique
+  shop              Shop      @relation(fields: [shopId], references: [id])
+  draftOrder        DraftOrder @relation(fields: [draftOrderId], references: [id])
+  shopifyOrderId    String
+  financialStatus   String?
+  fulfillmentStatus String?
+  orderedAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("orders")
+}
+
+// ─── Idempotent webhook processing ────────────────────────────────────────
+model WebhookEvent {
+  id             String   @id @default(cuid())
+  shopId         String
+  shop           Shop     @relation(fields: [shopId], references: [id])
+  topic          String
+  shopifyEventId String
+  payloadJson    String
+  processedAt    DateTime?
+  status         String   @default("pending") // pending | processed | failed
+  createdAt      DateTime @default(now())
+
+  @@unique([shopId, shopifyEventId])
+  @@map("webhook_events")
+}
+
+// ─── Audit log ─────────────────────────────────────────────────────────────
+model AuditLog {
+  id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id])
+  actorType    String   // user | system | shopify
+  actorId      String?
+  action       String
+  entityType   String?
+  entityId     String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@map("audit_logs")
+}

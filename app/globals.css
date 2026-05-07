@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #01696f;
+  --color-primary-hover: #0c4e54;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f7f6f2;
+  color: #28251d;
+  -webkit-font-smoothing: antialiased;
+}
