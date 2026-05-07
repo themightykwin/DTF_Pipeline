@@ -38,14 +38,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const data = patchSchema.parse(body);
+  const { availableSizes, availableColors, ...rest } = patchSchema.parse(body);
 
   const product = await prisma.catalogProduct.update({
     where: { id: params.id },
     data: {
-      ...data,
-      ...(data.availableSizes && { availableSizes: JSON.stringify(data.availableSizes) }),
-      ...(data.availableColors && { availableColors: JSON.stringify(data.availableColors) }),
+      ...rest,
+      ...(availableSizes !== undefined && { availableSizes: JSON.stringify(availableSizes) }),
+      ...(availableColors !== undefined && { availableColors: JSON.stringify(availableColors) }),
     },
   });
 

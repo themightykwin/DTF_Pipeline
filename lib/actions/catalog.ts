@@ -25,13 +25,13 @@ const catalogProductSchema = z.object({
 
 export async function createCatalogProduct(raw: unknown) {
   await requireAdminSession();
-  const data = catalogProductSchema.parse(raw);
+  const { availableSizes, availableColors, ...rest } = catalogProductSchema.parse(raw);
 
   const product = await prisma.catalogProduct.create({
     data: {
-      ...data,
-      availableSizes: JSON.stringify(data.availableSizes),
-      availableColors: JSON.stringify(data.availableColors),
+      ...rest,
+      availableSizes: JSON.stringify(availableSizes),
+      availableColors: JSON.stringify(availableColors),
     },
   });
 
@@ -41,17 +41,16 @@ export async function createCatalogProduct(raw: unknown) {
 
 export async function updateCatalogProduct(id: string, raw: unknown) {
   await requireAdminSession();
-  const data = catalogProductSchema.partial().parse(raw);
+  const { availableSizes, availableColors, ...rest } = catalogProductSchema.partial().parse(raw);
 
-  // Verify product exists (scoped check not strictly needed for admin, but safe)
   await prisma.catalogProduct.findUniqueOrThrow({ where: { id } });
 
   const product = await prisma.catalogProduct.update({
     where: { id },
     data: {
-      ...data,
-      ...(data.availableSizes && { availableSizes: JSON.stringify(data.availableSizes) }),
-      ...(data.availableColors && { availableColors: JSON.stringify(data.availableColors) }),
+      ...rest,
+      ...(availableSizes !== undefined && { availableSizes: JSON.stringify(availableSizes) }),
+      ...(availableColors !== undefined && { availableColors: JSON.stringify(availableColors) }),
     },
   });
 
@@ -75,7 +74,6 @@ export async function addCatalogProductImage(
   await requireAdminSession();
   await prisma.catalogProduct.findUniqueOrThrow({ where: { id: catalogProductId } });
 
-  // If marking as featured, unset others first
   if (data.isFeatured) {
     await prisma.catalogProductImage.updateMany({
       where: { catalogProductId },
