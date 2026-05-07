@@ -21,7 +21,6 @@ model Shop {
 
   settings            ShopSettings?
   shopCustomers       ShopCustomer[]
-  productTemplates    ProductTemplate[]
   shopifyProducts     ShopifyProduct[]
   draftOrders         DraftOrder[]
   orders              Order[]
