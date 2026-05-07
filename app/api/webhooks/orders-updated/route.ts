@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookHmac } from '@/lib/hmac';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   const rawBody = Buffer.from(await req.arrayBuffer());
   const hmac = req.headers.get('x-shopify-hmac-sha256') ?? '';
@@ -26,5 +28,3 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
-
-export const config = { api: { bodyParser: false } };
