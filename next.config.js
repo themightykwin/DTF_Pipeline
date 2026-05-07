@@ -1,14 +1,12 @@
-import type { NextConfig } from 'next';
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   images: {
     domains: ['res.cloudinary.com'],
   },
-  // Required for sharp to work correctly on Railway/Linux
   experimental: {
     serverComponentsExternalPackages: ['sharp'],
   },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
