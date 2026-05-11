@@ -3,12 +3,13 @@ import { NextResponse } from 'next/server';
 
 export default withAuth(
   function middleware(req) {
-    // Additional checks can go here (e.g. superadmin-only routes)
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized({ token }) {
+      authorized({ token, req }) {
+        // Allow the login page through unconditionally
+        if (req.nextUrl.pathname === '/admin/login') return true;
         return !!token;
       },
     },
@@ -18,7 +19,7 @@ export default withAuth(
   },
 );
 
-// Only protect /admin routes (login page is excluded below)
+// Only run middleware on /admin routes
 export const config = {
-  matcher: ['/admin/((?!login).*)'],
+  matcher: ['/admin/:path*'],
 };
