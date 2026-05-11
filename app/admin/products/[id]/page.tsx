@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ProductForm from '@/components/admin/ProductForm';
@@ -27,12 +29,10 @@ export default async function EditProductPage({ params }: Props) {
         <h1 className="text-xl font-semibold text-gray-900 mb-1">Edit Product</h1>
         <p className="text-sm text-gray-400">{product.id}</p>
       </div>
-
       <section>
         <h2 className="text-sm font-medium text-gray-700 mb-4">Product Details</h2>
         <ProductForm product={parsed} />
       </section>
-
       <section>
         <h2 className="text-sm font-medium text-gray-700 mb-4">Images</h2>
         <ImageManager productId={product.id} images={product.images} />

@@ -1,6 +1,5 @@
 import { type NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
@@ -11,7 +10,7 @@ const loginSchema = z.object({
 });
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
+  // No database adapter — using JWT sessions only
   session: { strategy: 'jwt' },
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
@@ -28,15 +27,20 @@ export const authOptions: NextAuthOptions = {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        const admin = await prisma.adminUser.findUnique({
-          where: { email: parsed.data.email },
-        });
-        if (!admin || !admin.passwordHash) return null;
+        try {
+          const admin = await prisma.adminUser.findUnique({
+            where: { email: parsed.data.email },
+          });
+          if (!admin || !admin.passwordHash) return null;
 
-        const valid = await bcrypt.compare(parsed.data.password, admin.passwordHash);
-        if (!valid) return null;
+          const valid = await bcrypt.compare(parsed.data.password, admin.passwordHash);
+          if (!valid) return null;
 
-        return { id: admin.id, email: admin.email, name: admin.name, role: admin.role };
+          return { id: admin.id, email: admin.email, name: admin.name, role: admin.role };
+        } catch (e) {
+          console.error('Auth DB error:', e);
+          return null;
+        }
       },
     }),
   ],
