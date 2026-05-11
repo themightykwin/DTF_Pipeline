@@ -1,25 +1,29 @@
-import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
-export default withAuth(
-  function middleware(req) {
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Always allow the login page through — no redirect
+  if (pathname === '/admin/login') {
     return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized({ token, req }) {
-        // Allow the login page through unconditionally
-        if (req.nextUrl.pathname === '/admin/login') return true;
-        return !!token;
-      },
-    },
-    pages: {
-      signIn: '/admin/login',
-    },
-  },
-);
+  }
 
-// Only run middleware on /admin routes
+  // For all other /admin/* routes, check for a valid JWT token
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  if (!token) {
+    const loginUrl = new URL('/admin/login', req.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+}
+
 export const config = {
   matcher: ['/admin/:path*'],
 };
