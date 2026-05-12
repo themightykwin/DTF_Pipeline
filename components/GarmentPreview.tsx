@@ -82,6 +82,7 @@ export default function GarmentPreview({
   function onMouseDown(e: React.MouseEvent) {
     if (!interactive || !onTransformChange) return;
     e.preventDefault();
+    const onChange = onTransformChange;
     dragState.current = {
       dragging: true,
       startX: e.clientX,
@@ -97,7 +98,7 @@ export default function GarmentPreview({
       const printH = area.height * rect.height;
       const dx = (e.clientX - dragState.current.startX) / printW;
       const dy = (e.clientY - dragState.current.startY) / printH;
-      onTransformChange({
+      onChange({
         ...transform,
         xPct: Math.min(1, Math.max(0, dragState.current.startXPct + dx)),
         yPct: Math.min(1, Math.max(0, dragState.current.startYPct + dy)),
@@ -130,13 +131,14 @@ export default function GarmentPreview({
   function onTouchMove(e: React.TouchEvent) {
     if (!dragState.current.dragging || !containerRef.current || !onTransformChange) return;
     e.preventDefault();
+    const onChange = onTransformChange;
     const touch = e.touches[0];
     const rect = containerRef.current.getBoundingClientRect();
     const printW = area.width * rect.width;
     const printH = area.height * rect.height;
     const dx = (touch.clientX - dragState.current.startX) / printW;
     const dy = (touch.clientY - dragState.current.startY) / printH;
-    onTransformChange({
+    onChange({
       ...transform,
       xPct: Math.min(1, Math.max(0, dragState.current.startXPct + dx)),
       yPct: Math.min(1, Math.max(0, dragState.current.startYPct + dy)),
