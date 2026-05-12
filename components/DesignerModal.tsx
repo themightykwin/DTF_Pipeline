@@ -29,6 +29,9 @@ const DEFAULT_TRANSFORM: ArtworkTransform = { xPct: 0.5, yPct: 0.4, scalePct: 80
 const MIN_SCALE = 10;
 const MAX_SCALE = 160;
 
+// Zoom levels the +/- buttons snap through
+const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface SideDesign {
@@ -62,9 +65,7 @@ interface Props {
   productId: string;
   productType: string;
   productTitle: string;
-  /** All images from the product — used as the canvas background */
   productImages: ProductImage[];
-  /** Which image was active on the PDP when the modal opened */
   activeImageIdx: number;
   onClose: () => void;
   onSave: (design: DesignOutput) => void;
@@ -83,27 +84,15 @@ export default function DesignerModal({
   initialDesign,
 }: Props) {
   const [activeSide, setActiveSide] = useState<Side>('front');
-  // Which product image is shown in the canvas
   const [canvasImageIdx, setCanvasImageIdx] = useState(activeImageIdx);
+  const [zoom, setZoom] = useState(1.0);  // canvas CSS scale factor
 
   const [sides, setSides] = useState<Record<Side, SideState>>({
     front: initialDesign?.front
-      ? {
-          artworkUrl: initialDesign.front.artworkUrl,
-          artUploadId: initialDesign.front.artUploadId,
-          transform: initialDesign.front.transform,
-          artAspect: 1,
-          validation: null,
-        }
+      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null }
       : defaultSideState(),
     back: initialDesign?.back
-      ? {
-          artworkUrl: initialDesign.back.artworkUrl,
-          artUploadId: initialDesign.back.artUploadId,
-          transform: initialDesign.back.transform,
-          artAspect: 1,
-          validation: null,
-        }
+      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null }
       : defaultSideState(),
   });
 
@@ -111,27 +100,24 @@ export default function DesignerModal({
   const [panelOpen, setPanelOpen] = useState(true);
   const [selected, setSelected] = useState(false);
 
+  // The outer scrollable viewport
+  const viewportRef = useRef<HTMLDivElement>(null);
+  // The canvas card (square, fixed size — zoom is applied via CSS transform)
   const canvasRef = useRef<HTMLDivElement>(null);
+
   const drag = useRef<{
-    active: boolean;
-    mode: 'move' | 'scale';
-    startX: number;
-    startY: number;
-    startXPct: number;
-    startYPct: number;
-    startScale: number;
-    canvasW: number;
-    canvasH: number;
-  }>({
-    active: false, mode: 'move',
-    startX: 0, startY: 0,
-    startXPct: 0, startYPct: 0,
-    startScale: 80, canvasW: 0, canvasH: 0,
-  });
+    active: boolean; mode: 'move' | 'scale';
+    startX: number; startY: number;
+    startXPct: number; startYPct: number; startScale: number;
+    canvasW: number; canvasH: number;
+  }>({ active: false, mode: 'move', startX: 0, startY: 0, startXPct: 0, startYPct: 0, startScale: 80, canvasW: 0, canvasH: 0 });
 
   const current = sides[activeSide];
   const area = (PRINT_AREA[productType] ?? PRINT_AREA.tshirt)[activeSide];
   const canvasImage = productImages[canvasImageIdx] ?? productImages[0];
+
+  // Canvas logical size (pre-zoom). Large enough for fine-grained placement.
+  const CANVAS_SIZE = 700;
 
   // Lock body scroll
   useEffect(() => {
@@ -139,7 +125,7 @@ export default function DesignerModal({
     return () => { document.body.style.overflow = ''; };
   }, []);
 
-  // Track aspect ratio when artwork changes
+  // Track artwork aspect ratio
   useEffect(() => {
     if (!current.artworkUrl) return;
     const img = new Image();
@@ -157,6 +143,21 @@ export default function DesignerModal({
       [side]: { ...prev[side], transform: { ...prev[side].transform, ...patch } },
     }));
   }
+
+  // ── Zoom helpers ──
+  function zoomIn() {
+    setZoom(z => {
+      const next = ZOOM_STEPS.find(s => s > z + 0.01);
+      return next ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
+    });
+  }
+  function zoomOut() {
+    setZoom(z => {
+      const prev = [...ZOOM_STEPS].reverse().find(s => s < z - 0.01);
+      return prev ?? ZOOM_STEPS[0];
+    });
+  }
+  function zoomFit() { setZoom(1.0); }
 
   // ── Artwork position calc ──
   function getArtworkStyle(side: Side) {
@@ -180,18 +181,22 @@ export default function DesignerModal({
     const side = activeSide;
     const t = sides[side].transform;
     const a = (PRINT_AREA[productType] ?? PRINT_AREA.tshirt)[side];
+    // Account for zoom when translating pixel deltas to percentage deltas
     drag.current = {
       active: true, mode: 'move',
       startX: clientX, startY: clientY,
-      startXPct: t.xPct, startYPct: t.yPct,
-      startScale: t.scalePct, canvasW: rect.width, canvasH: rect.height,
+      startXPct: t.xPct, startYPct: t.yPct, startScale: t.scalePct,
+      canvasW: rect.width, canvasH: rect.height,
     };
     function onMove(e: MouseEvent | TouchEvent) {
       if (!drag.current.active) return;
       const cx = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
       const cy = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
-      const dx = (cx - drag.current.startX) / (drag.current.canvasW * a.width);
-      const dy = (cy - drag.current.startY) / (drag.current.canvasH * a.height);
+      // rect.width is the zoomed width; divide by zoom to get logical canvas coords
+      const logicalW = drag.current.canvasW;
+      const logicalH = drag.current.canvasH;
+      const dx = (cx - drag.current.startX) / (logicalW * a.width);
+      const dy = (cy - drag.current.startY) / (logicalH * a.height);
       updateTransform(side, {
         xPct: Math.min(1, Math.max(0, drag.current.startXPct + dx)),
         yPct: Math.min(1, Math.max(0, drag.current.startYPct + dy)),
@@ -221,17 +226,15 @@ export default function DesignerModal({
     drag.current = {
       active: true, mode: 'scale',
       startX: clientX, startY: clientY,
-      startXPct: t.xPct, startYPct: t.yPct,
-      startScale: t.scalePct, canvasW: rect.width, canvasH: rect.height,
+      startXPct: t.xPct, startYPct: t.yPct, startScale: t.scalePct,
+      canvasW: rect.width, canvasH: rect.height,
     };
     function onMove(e: MouseEvent | TouchEvent) {
       if (!drag.current.active) return;
       const cx = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
       const cy = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
       const delta = ((cx - drag.current.startX) + (drag.current.startY - cy)) / 3;
-      updateTransform(side, {
-        scalePct: Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, drag.current.startScale + delta))),
-      });
+      updateTransform(side, { scalePct: Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, drag.current.startScale + delta))) });
     }
     function onUp() {
       drag.current.active = false;
@@ -256,10 +259,7 @@ export default function DesignerModal({
       fd.append('userId', 'demo-user');
       fd.append('garmentType', productType);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const json = await res.json() as {
-        ok: boolean;
-        data: { artUploadId: string; storageUrl: string; validation: ValidationResult };
-      };
+      const json = await res.json() as { ok: boolean; data: { artUploadId: string; storageUrl: string; validation: ValidationResult } };
       if (json.ok) {
         updateSide(side, {
           artworkUrl: json.data.storageUrl,
@@ -287,6 +287,7 @@ export default function DesignerModal({
 
   const hasAnyDesign = !!(sides.front.artUploadId || sides.back.artUploadId);
   const artStyle = getArtworkStyle(activeSide);
+  const zoomPct = Math.round(zoom * 100);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#1a1a1a]">
@@ -294,38 +295,24 @@ export default function DesignerModal({
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-5 py-3 bg-[#111] border-b border-white/10 flex-shrink-0 h-14">
         <div className="flex items-center gap-4">
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-1 rounded hover:bg-white/10 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
           <span className="text-sm font-semibold text-white">{productTitle}</span>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            {sides.front.artUploadId && (
-              <span className="px-2 py-0.5 bg-[#01696f]/20 text-[#01696f] rounded-full">Front ✓</span>
-            )}
-            {sides.back.artUploadId && (
-              <span className="px-2 py-0.5 bg-[#01696f]/20 text-[#01696f] rounded-full">Back ✓</span>
-            )}
+          <div className="flex items-center gap-1">
+            {sides.front.artUploadId && <span className="px-2 py-0.5 bg-[#01696f]/20 text-[#01696f] rounded-full text-xs">Front ✓</span>}
+            {sides.back.artUploadId  && <span className="px-2 py-0.5 bg-[#01696f]/20 text-[#01696f] rounded-full text-xs">Back ✓</span>}
           </div>
         </div>
         <div className="flex items-center gap-3">
           {current.artworkUrl && (
-            <button
-              onClick={() => updateTransform(activeSide, { xPct: 0.5, yPct: 0.4 })}
-              className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded hover:bg-white/10 transition-colors"
-            >
+            <button onClick={() => updateTransform(activeSide, { xPct: 0.5, yPct: 0.4 })} className="text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded hover:bg-white/10 transition-colors">
               Reset position
             </button>
           )}
-          <button
-            onClick={handleApply}
-            disabled={!hasAnyDesign}
-            className="px-5 py-2 bg-[#01696f] text-white text-sm font-semibold rounded-lg hover:bg-[#0c4e54] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
+          <button onClick={handleApply} disabled={!hasAnyDesign} className="px-5 py-2 bg-[#01696f] text-white text-sm font-semibold rounded-lg hover:bg-[#0c4e54] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
             Apply Design →
           </button>
         </div>
@@ -350,258 +337,251 @@ export default function DesignerModal({
 
         {/* ── Upload panel ── */}
         {panelOpen && (
-          <div className="w-80 flex-shrink-0 bg-[#1e1e1e] border-r border-white/10 flex flex-col overflow-y-auto">
+          <div className="w-72 flex-shrink-0 bg-[#1e1e1e] border-r border-white/10 flex flex-col overflow-y-auto">
             <div className="p-5 space-y-5">
               <div>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                  Upload Artwork
-                </h3>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Upload Artwork</h3>
                 <p className="text-xs text-gray-500">
-                  Uploading to:{' '}
-                  <span className="text-white font-medium capitalize">{activeSide}</span>
+                  Uploading to: <span className="text-white font-medium capitalize">{activeSide}</span>
                 </p>
               </div>
               <UploadZone onUpload={handleUpload} isUploading={isUploading} />
               {current.validation && (
                 <div className={`rounded-xl p-3 text-xs ${
-                  current.validation.status === 'pass'
-                    ? 'bg-green-900/30 text-green-400'
-                    : current.validation.status === 'warn'
-                    ? 'bg-yellow-900/30 text-yellow-400'
-                    : 'bg-red-900/30 text-red-400'
+                  current.validation.status === 'pass' ? 'bg-green-900/30 text-green-400'
+                  : current.validation.status === 'warn' ? 'bg-yellow-900/30 text-yellow-400'
+                  : 'bg-red-900/30 text-red-400'
                 }`}>
                   <p className="font-semibold mb-0.5">{current.validation.summary}</p>
                   <p className="opacity-80">{current.validation.detail}</p>
                 </div>
               )}
               <div className="bg-white/5 rounded-xl p-4 text-xs text-gray-400 leading-relaxed">
-                <span className="text-white font-medium">Tip:</span> Switch between Front and Back
-                below the canvas. Use the image strip to preview your design on different product photos.
+                <span className="text-white font-medium">Tip:</span> Switch Front / Back below the canvas. Use + / − to zoom in for precise placement.
               </div>
             </div>
           </div>
         )}
 
         {/* ── Canvas area ── */}
-        <div className="flex-1 flex flex-col items-center justify-center bg-[#2a2a2a] overflow-hidden p-2 gap-3">
+        <div className="flex-1 flex flex-col bg-[#2a2a2a] overflow-hidden">
 
-          {/* Front / Back switcher */}
-          <div className="flex items-center gap-1 bg-[#111] rounded-xl p-1 flex-shrink-0">
-            {(['front', 'back'] as Side[]).map((side) => (
+          {/* ── Canvas toolbar: side switcher + zoom ── */}
+          <div className="flex items-center justify-between px-4 py-2 bg-[#222] border-b border-white/10 flex-shrink-0">
+            {/* Front / Back */}
+            <div className="flex items-center gap-1 bg-[#111] rounded-xl p-1">
+              {(['front', 'back'] as Side[]).map((side) => (
+                <button
+                  key={side}
+                  onClick={() => { setActiveSide(side); setSelected(false); }}
+                  className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                    activeSide === side ? 'bg-[#01696f] text-white shadow' : 'text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {side === 'front'
+                    ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="8" r="4"/><path strokeLinecap="round" strokeLinejoin="round" d="M6 20v-2a6 6 0 0112 0v2"/></svg>
+                    : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4l16 16M4 20L20 4"/><circle cx="12" cy="12" r="4"/></svg>
+                  }
+                  <span className="capitalize">{side}</span>
+                  {sides[side].artUploadId && <span className="w-2 h-2 rounded-full bg-[#4ade80]" />}
+                </button>
+              ))}
+            </div>
+
+            {/* Zoom controls */}
+            <div className="flex items-center gap-1 bg-[#111] rounded-xl p-1">
               <button
-                key={side}
-                onClick={() => { setActiveSide(side); setSelected(false); }}
-                className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  activeSide === side
-                    ? 'bg-[#01696f] text-white shadow'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10'
-                }`}
+                onClick={zoomOut}
+                disabled={zoom <= ZOOM_STEPS[0]}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg font-bold"
+                title="Zoom out"
               >
-                {side === 'front'
-                  ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="8" r="4"/><path strokeLinecap="round" strokeLinejoin="round" d="M6 20v-2a6 6 0 0112 0v2"/></svg>
-                  : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4l16 16M4 20L20 4"/><circle cx="12" cy="12" r="4"/></svg>
-                }
-                <span className="capitalize">{side}</span>
-                {sides[side].artUploadId && (
-                  <span className="w-2 h-2 rounded-full bg-[#4ade80]" />
-                )}
+                −
               </button>
-            ))}
+              <button
+                onClick={zoomFit}
+                className="px-3 h-8 flex items-center justify-center rounded-lg text-xs font-mono text-gray-300 hover:text-white hover:bg-white/10 transition-colors min-w-[52px]"
+                title="Reset zoom"
+              >
+                {zoomPct}%
+              </button>
+              <button
+                onClick={zoomIn}
+                disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-lg font-bold"
+                title="Zoom in"
+              >
+                +
+              </button>
+            </div>
           </div>
 
-          {/* Garment canvas */}
+          {/* ── Scrollable canvas viewport ── */}
           <div
-            ref={canvasRef}
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              if (target === canvasRef.current || target.dataset.garment) setSelected(false);
-            }}
-            className="relative bg-white rounded-2xl shadow-2xl overflow-hidden flex-shrink-0"
-            style={{ width: 'min(82vh, 860px)', height: 'min(82vh, 860px)' }}
+            ref={viewportRef}
+            className="flex-1 overflow-auto flex items-center justify-center"
+            style={{ padding: zoom > 1 ? '40px' : '24px' }}
           >
-            {/* Product photo — z-index 0 */}
-            {canvasImage && (
-              <img
-                src={canvasImage.storageUrl}
-                alt={canvasImage.altText ?? productTitle}
-                data-garment="true"
-                className="w-full h-full object-contain select-none"
-                draggable={false}
-                style={{ position: 'relative', zIndex: 0 }}
-              />
-            )}
-
-            {/* Print area guide — z-index 10 */}
+            {/* Canvas card — fixed logical size, zoom applied via transform */}
             <div
-              className="absolute border border-dashed border-[#01696f]/40 rounded pointer-events-none"
-              style={{
-                left: `${area.left * 100}%`,
-                top: `${area.top * 100}%`,
-                width: `${area.width * 100}%`,
-                height: `${area.height * 100}%`,
-                zIndex: 10,
+              ref={canvasRef}
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target === canvasRef.current || target.dataset.garment) setSelected(false);
               }}
-            />
+              className="relative bg-white rounded-2xl shadow-2xl overflow-hidden flex-shrink-0 origin-center transition-transform duration-150"
+              style={{
+                width:  `${CANVAS_SIZE}px`,
+                height: `${CANVAS_SIZE}px`,
+                transform: `scale(${zoom})`,
+                // When zoomed in, the scaled element needs space; margin compensates
+                margin: zoom > 1 ? `${(zoom - 1) * CANVAS_SIZE / 2}px` : undefined,
+              }}
+            >
+              {/* Product photo — z-index 0 */}
+              {canvasImage && (
+                <img
+                  src={canvasImage.storageUrl}
+                  alt={canvasImage.altText ?? productTitle}
+                  data-garment="true"
+                  className="w-full h-full object-contain select-none"
+                  draggable={false}
+                  style={{ position: 'relative', zIndex: 0 }}
+                />
+              )}
 
-            {/* Artwork — z-index 20 */}
-            {current.artworkUrl && (
+              {/* Print area guide — z-index 10 */}
               <div
-                className="absolute"
-                style={{ left: artStyle.left, top: artStyle.top, width: artStyle.width, zIndex: 20 }}
-              >
-                <div className="relative">
-                  <img
-                    src={current.artworkUrl}
-                    alt="Design"
-                    draggable={false}
-                    onMouseDown={startMove}
-                    onTouchStart={startMove}
-                    onClick={(e) => { e.stopPropagation(); setSelected(true); }}
-                    className="w-full h-auto block select-none"
-                    style={{
-                      mixBlendMode: 'multiply',
-                      cursor: selected ? 'grab' : 'pointer',
-                    }}
-                  />
-
-                  {selected && (
-                    <>
-                      {/* Selection border */}
-                      <div className="absolute inset-0 border-2 border-[#01696f] rounded pointer-events-none" />
-
-                      {/* Delete */}
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateSide(activeSide, { artworkUrl: null, artUploadId: null });
-                          setSelected(false);
-                        }}
-                        className="absolute -top-3.5 -left-3.5 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
-                        title="Remove design"
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-
-                      {/* Center */}
-                      <button
-                        onMouseDown={(e) => e.stopPropagation()}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateTransform(activeSide, { xPct: 0.5, yPct: 0.5 });
-                        }}
-                        className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
-                        title="Center design"
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-                        </svg>
-                      </button>
-
-                      {/* Scale handle */}
-                      <div
-                        onMouseDown={startScale}
-                        onTouchStart={startScale}
-                        className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-[#01696f] hover:bg-[#0c4e54] rounded-full flex items-center justify-center shadow-lg cursor-nwse-resize z-10 touch-none"
-                        title="Drag to resize"
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                        </svg>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* No artwork placeholder */}
-            {!current.artworkUrl && (
-              <div
-                className="absolute flex flex-col items-center justify-center pointer-events-none"
+                className="absolute border border-dashed border-[#01696f]/40 rounded pointer-events-none"
                 style={{
-                  left: `${area.left * 100}%`,
-                  top: `${area.top * 100}%`,
-                  width: `${area.width * 100}%`,
-                  height: `${area.height * 100}%`,
+                  left: `${area.left * 100}%`, top: `${area.top * 100}%`,
+                  width: `${area.width * 100}%`, height: `${area.height * 100}%`,
                   zIndex: 10,
                 }}
-              >
-                <svg className="w-8 h-8 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                </svg>
-                <span className="text-xs text-gray-300 text-center leading-tight">
-                  Upload artwork<br />for {activeSide}
-                </span>
-              </div>
-            )}
+              />
+
+              {/* Artwork — z-index 20 */}
+              {current.artworkUrl && (
+                <div className="absolute" style={{ left: artStyle.left, top: artStyle.top, width: artStyle.width, zIndex: 20 }}>
+                  <div className="relative">
+                    <img
+                      src={current.artworkUrl}
+                      alt="Design"
+                      draggable={false}
+                      onMouseDown={startMove}
+                      onTouchStart={startMove}
+                      onClick={(e) => { e.stopPropagation(); setSelected(true); }}
+                      className="w-full h-auto block select-none"
+                      style={{ mixBlendMode: 'multiply', cursor: selected ? 'grab' : 'pointer' }}
+                    />
+                    {selected && (
+                      <>
+                        <div className="absolute inset-0 border-2 border-[#01696f] rounded pointer-events-none" />
+                        {/* Delete */}
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); updateSide(activeSide, { artworkUrl: null, artUploadId: null }); setSelected(false); }}
+                          className="absolute -top-3.5 -left-3.5 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
+                          title="Remove design"
+                        >
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                        {/* Center */}
+                        <button
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); updateTransform(activeSide, { xPct: 0.5, yPct: 0.5 }); }}
+                          className="absolute -top-3.5 -right-3.5 w-7 h-7 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center shadow-lg z-10 transition-colors"
+                          title="Center design"
+                        >
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+                          </svg>
+                        </button>
+                        {/* Scale handle */}
+                        <div
+                          onMouseDown={startScale}
+                          onTouchStart={startScale}
+                          className="absolute -bottom-3.5 -right-3.5 w-7 h-7 bg-[#01696f] hover:bg-[#0c4e54] rounded-full flex items-center justify-center shadow-lg cursor-nwse-resize z-10 touch-none"
+                          title="Drag to resize"
+                        >
+                          <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          </svg>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* No artwork placeholder */}
+              {!current.artworkUrl && (
+                <div
+                  className="absolute flex flex-col items-center justify-center pointer-events-none"
+                  style={{
+                    left: `${area.left * 100}%`, top: `${area.top * 100}%`,
+                    width: `${area.width * 100}%`, height: `${area.height * 100}%`,
+                    zIndex: 10,
+                  }}
+                >
+                  <svg className="w-8 h-8 text-gray-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                  </svg>
+                  <span className="text-xs text-gray-300 text-center leading-tight">
+                    Upload artwork<br />for {activeSide}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Product image thumbnail strip */}
+          {/* ── Image thumbnail strip ── */}
           {productImages.length > 1 && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">View:</span>
+            <div className="flex items-center gap-2 px-4 py-2 bg-[#222] border-t border-white/10 flex-shrink-0 overflow-x-auto">
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1 flex-shrink-0">View:</span>
               {productImages.map((img, i) => (
                 <button
                   key={img.id}
                   onClick={() => setCanvasImageIdx(i)}
                   title={img.altText ?? undefined}
-                  className={`w-12 h-12 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
-                    i === canvasImageIdx
-                      ? 'border-[#01696f] shadow-md scale-105'
-                      : 'border-white/20 hover:border-white/50 opacity-70 hover:opacity-100'
+                  className={`w-11 h-11 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${
+                    i === canvasImageIdx ? 'border-[#01696f] scale-105' : 'border-white/20 hover:border-white/50 opacity-60 hover:opacity-100'
                   }`}
                 >
-                  <img
-                    src={img.storageUrl}
-                    alt={img.altText ?? ''}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* ── Right panel: scale controls ── */}
+        {/* ── Right panel: scale slider when artwork selected ── */}
         {current.artworkUrl && selected && (
           <div className="w-52 flex-shrink-0 bg-[#1e1e1e] border-l border-white/10 flex flex-col p-4 gap-4">
-            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider capitalize">
-              {activeSide} Design
-            </h3>
+            <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider capitalize">{activeSide} Design</h3>
             <div>
               <div className="flex justify-between text-xs text-gray-400 mb-1.5">
                 <span>Scale</span>
                 <span className="font-mono text-[#01696f]">{current.transform.scalePct}%</span>
               </div>
               <input
-                type="range"
-                min={MIN_SCALE}
-                max={MAX_SCALE}
+                type="range" min={MIN_SCALE} max={MAX_SCALE}
                 value={current.transform.scalePct}
                 onChange={(e) => updateTransform(activeSide, { scalePct: parseInt(e.target.value) })}
                 className="w-full accent-[#01696f]"
               />
             </div>
             <div className="space-y-2">
-              <button
-                onClick={() => updateTransform(activeSide, { xPct: 0.5, yPct: 0.5 })}
-                className="w-full text-xs text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg py-2 transition-colors"
-              >
+              <button onClick={() => updateTransform(activeSide, { xPct: 0.5, yPct: 0.5 })} className="w-full text-xs text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg py-2 transition-colors">
                 Center on garment
               </button>
-              <button
-                onClick={() => updateTransform(activeSide, { yPct: 0.3 })}
-                className="w-full text-xs text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg py-2 transition-colors"
-              >
+              <button onClick={() => updateTransform(activeSide, { yPct: 0.3 })} className="w-full text-xs text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg py-2 transition-colors">
                 Move to chest/upper
               </button>
             </div>
-            <p className="mt-auto text-[10px] text-gray-600 leading-relaxed">
-              Drag design to reposition. Use corner handle to resize.
-            </p>
+            <p className="mt-auto text-[10px] text-gray-600 leading-relaxed">Drag to reposition. Corner handle to resize. Use zoom for precision.</p>
           </div>
         )}
       </div>
@@ -609,25 +589,9 @@ export default function DesignerModal({
   );
 }
 
-function ToolButton({
-  label,
-  active,
-  onClick,
-  icon,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-}) {
+function ToolButton({ label, active, onClick, icon }: { label: string; active: boolean; onClick: () => void; icon: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      title={label}
-      className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-colors ${
-        active ? 'bg-[#01696f] text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'
-      }`}
-    >
+    <button onClick={onClick} title={label} className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-colors ${active ? 'bg-[#01696f] text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}>
       {icon}
       <span className="text-[9px] font-medium leading-none">{label}</span>
     </button>
