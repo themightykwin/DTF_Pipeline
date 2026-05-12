@@ -4,9 +4,9 @@ import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import BulkOrderGrid from '@/components/BulkOrderGrid';
 import GarmentPreview, { ArtworkTransform } from '@/components/GarmentPreview';
-import type { ValidationResult } from '@/lib/validation';
+import type { DesignOutput, SideDesign } from '@/components/DesignerModal';
 
-// Load designer modal only client-side (it locks body scroll, uses window)
+// Load designer modal only client-side (locks body scroll, uses window)
 const DesignerModal = dynamic(() => import('@/components/DesignerModal'), { ssr: false });
 
 interface Image {
@@ -29,7 +29,6 @@ interface Product {
 }
 
 const DEFAULT_TRANSFORM: ArtworkTransform = { xPct: 0.5, yPct: 0.4, scalePct: 80 };
-const PLACEHOLDER_USER_ID = 'demo-user';
 
 export default function ProductCustomizer({ product }: { product: Product }) {
   const { availableSizes, availableColors, images } = product;
@@ -57,17 +56,17 @@ export default function ProductCustomizer({ product }: { product: Product }) {
     0
   );
 
-  // Artwork / design state
-  const [artworkUrl, setArtworkUrl] = useState<string | null>(null);
-  const [artUploadId, setArtUploadId] = useState<string | null>(null);
-  const [artTransform, setArtTransform] = useState<ArtworkTransform>(DEFAULT_TRANSFORM);
+  // Design state — front + back
+  const [design, setDesign] = useState<DesignOutput>({ front: null, back: null });
+  const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
   const [designerOpen, setDesignerOpen] = useState(false);
 
-  function handleDesignApply(uploadId: string, url: string, transform: ArtworkTransform) {
-    setArtUploadId(uploadId);
-    setArtworkUrl(url);
-    setArtTransform(transform);
+  function handleDesignApply(output: DesignOutput) {
+    setDesign(output);
   }
+
+  const currentSideDesign: SideDesign | null = design[previewSide];
+  const hasAnyDesign = !!(design.front || design.back);
 
   function toggleColor(label: string) {
     setSelectedColors((prev) =>
@@ -80,7 +79,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
   const [configId, setConfigId] = useState<string | null>(null);
 
   async function handleSave() {
-    if (!artUploadId || totalUnits === 0) return;
+    if (!hasAnyDesign || totalUnits === 0) return;
     setSubmitState('saving');
     try {
       const res = await fetch('/api/configs', {
@@ -88,13 +87,19 @@ export default function ProductCustomizer({ product }: { product: Product }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           shopDomain: 'your-store.myshopify.com',
-          userId: PLACEHOLDER_USER_ID,
+          userId: 'demo-user',
           garmentTemplateId: product.productType,
-          artUploadId,
+          artUploadId: design.front?.artUploadId ?? design.back?.artUploadId,
           catalogProductId: product.id,
-          inputs: { productType: product.productType, selectedColors, quantities, transform: artTransform },
-          scalePercent: Math.round(artTransform.scalePct),
-          yPercent: Math.round(artTransform.yPct * 100),
+          inputs: {
+            productType: product.productType,
+            selectedColors,
+            quantities,
+            front: design.front ? { transform: design.front.transform } : null,
+            back: design.back ? { transform: design.back.transform } : null,
+          },
+          scalePercent: Math.round(design.front?.transform.scalePct ?? design.back?.transform.scalePct ?? 80),
+          yPercent: Math.round((design.front?.transform.yPct ?? design.back?.transform.yPct ?? 0.4) * 100),
           priceSnapshot: (product.basePriceCents / 100) * totalUnits,
         }),
       });
@@ -110,39 +115,62 @@ export default function ProductCustomizer({ product }: { product: Product }) {
     }
   }
 
-  const canSave = !!artUploadId && totalUnits > 0;
+  const canSave = hasAnyDesign && totalUnits > 0;
 
   return (
     <>
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
-          {/* ── LEFT: Garment preview ── */}
+          {/* ── LEFT: Preview ── */}
           <div className="flex flex-col gap-4">
 
-            {/* Main garment preview with artwork overlay */}
+            {/* Main preview */}
             <div className="relative rounded-2xl overflow-hidden bg-white border border-gray-200 aspect-square">
-              {/* Always show garment preview — it shows the product photo when no artwork,
-                  and composites artwork over the garment mockup when uploaded */}
-              {activeImage && !artworkUrl ? (
-                // Show admin product photo when no design uploaded yet
+              {activeImage && !hasAnyDesign ? (
                 <img
                   src={activeImage.storageUrl}
                   alt={activeImage.altText ?? product.title}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                // Show garment mockup with artwork composited on top
                 <GarmentPreview
                   garmentType={product.productType}
-                  artworkUrl={artworkUrl}
-                  transform={artTransform}
+                  artworkUrl={currentSideDesign?.artworkUrl ?? null}
+                  transform={currentSideDesign?.transform ?? DEFAULT_TRANSFORM}
                   interactive={false}
                   className="w-full h-full"
+                  side={previewSide}
                 />
               )}
 
-              {/* Open Designer CTA overlay */}
+              {/* Front/Back toggle on preview */}
+              {hasAnyDesign && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full p-1">
+                  {(['front', 'back'] as const).map((side) => (
+                    <button
+                      key={side}
+                      onClick={() => setPreviewSide(side)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                        previewSide === side ? 'bg-white text-gray-900' : 'text-white/70 hover:text-white'
+                      }`}
+                    >
+                      <span className="capitalize">{side}</span>
+                      {design[side] && <span className="w-1.5 h-1.5 rounded-full bg-[#01696f]" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Design badges */}
+              {hasAnyDesign && (
+                <div className="absolute top-3 left-3 flex flex-col gap-1">
+                  {design.front && <span className="px-2 py-0.5 bg-[#01696f] text-white text-[10px] font-semibold rounded-full">Front ✓</span>}
+                  {design.back && <span className="px-2 py-0.5 bg-[#01696f] text-white text-[10px] font-semibold rounded-full">Back ✓</span>}
+                </div>
+              )}
+
+              {/* Open Designer CTA */}
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                 <button
                   onClick={() => setDesignerOpen(true)}
@@ -151,22 +179,13 @@ export default function ProductCustomizer({ product }: { product: Product }) {
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
-                  {artworkUrl ? 'Edit Design' : 'Start Designing'}
+                  {hasAnyDesign ? 'Edit Design' : 'Start Designing'}
                 </button>
               </div>
-
-              {/* Design applied badge */}
-              {artworkUrl && (
-                <div className="absolute top-3 left-3">
-                  <span className="px-2.5 py-1 bg-[#01696f] text-white text-[10px] font-semibold rounded-full">
-                    Design applied
-                  </span>
-                </div>
-              )}
             </div>
 
-            {/* Thumbnail strip (admin product photos) */}
-            {images.length > 1 && !artworkUrl && (
+            {/* Thumbnail strip */}
+            {images.length > 1 && !hasAnyDesign && (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {images.map((img, i) => (
                   <button
@@ -216,19 +235,13 @@ export default function ProductCustomizer({ product }: { product: Product }) {
                       onClick={() => toggleColor(color.label)}
                       title={color.label}
                       className={`group relative w-9 h-9 rounded-full border-2 transition-all ${
-                        isSelected
-                          ? 'border-[#01696f] scale-110 shadow-md'
-                          : 'border-gray-300 hover:border-gray-500 hover:scale-105'
+                        isSelected ? 'border-[#01696f] scale-110 shadow-md' : 'border-gray-300 hover:border-gray-500 hover:scale-105'
                       }`}
                       style={{ backgroundColor: color.hex }}
                     >
                       {isSelected && (
                         <span className="absolute inset-0 flex items-center justify-center">
-                          <svg
-                            className="w-4 h-4 drop-shadow"
-                            style={{ color: isLightColor(color.hex) ? '#1f2937' : '#ffffff' }}
-                            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
-                          >
+                          <svg className="w-4 h-4 drop-shadow" style={{ color: isLightColor(color.hex) ? '#1f2937' : '#ffffff' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         </span>
@@ -246,9 +259,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
             <div>
               <h2 className="text-sm font-semibold text-gray-900 mb-3">
                 Sizes &amp; Quantities
-                {totalUnits > 0 && (
-                  <span className="ml-2 text-xs font-normal text-gray-400">{totalUnits} units</span>
-                )}
+                {totalUnits > 0 && <span className="ml-2 text-xs font-normal text-gray-400">{totalUnits} units</span>}
               </h2>
               <BulkOrderGrid
                 sizes={availableSizes}
@@ -270,14 +281,11 @@ export default function ProductCustomizer({ product }: { product: Product }) {
                 {submitState === 'saving' ? 'Saving…'
                   : submitState === 'done' ? '✓ Design Saved'
                   : totalUnits === 0 ? 'Enter quantities to continue'
-                  : !artUploadId ? 'Add your design to continue'
+                  : !hasAnyDesign ? 'Add your design to continue'
                   : 'Save Design'}
               </button>
-
               {submitState === 'done' && configId && (
-                <p className="text-xs text-center text-green-700 font-medium">
-                  ✓ Saved — reference: {configId}
-                </p>
+                <p className="text-xs text-center text-green-700 font-medium">✓ Saved — reference: {configId}</p>
               )}
               {submitState === 'error' && (
                 <p className="text-xs text-center text-red-600">Something went wrong. Try again.</p>
@@ -287,7 +295,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
         </div>
       </div>
 
-      {/* Full-screen designer modal */}
+      {/* Full-screen designer */}
       {designerOpen && (
         <DesignerModal
           productId={product.id}
@@ -295,8 +303,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
           productTitle={product.title}
           onClose={() => setDesignerOpen(false)}
           onSave={handleDesignApply}
-          initialArtworkUrl={artworkUrl}
-          initialTransform={artTransform}
+          initialDesign={design}
         />
       )}
     </>

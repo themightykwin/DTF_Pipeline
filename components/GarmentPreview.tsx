@@ -2,27 +2,39 @@
 
 import { useRef, useEffect, useState } from 'react';
 
-// Print area as % of garment image dimensions for each type
-const PRINT_AREA: Record<string, { top: number; left: number; width: number; height: number }> = {
-  tshirt:    { top: 0.22, left: 0.25, width: 0.50, height: 0.45 },
-  hoodie:    { top: 0.20, left: 0.25, width: 0.50, height: 0.42 },
-  crewneck:  { top: 0.22, left: 0.25, width: 0.50, height: 0.42 },
+type Side = 'front' | 'back';
+
+// Print area as % of garment image dimensions — per side
+const PRINT_AREA: Record<string, Record<Side, { top: number; left: number; width: number; height: number }>> = {
+  tshirt: {
+    front: { top: 0.22, left: 0.25, width: 0.50, height: 0.45 },
+    back:  { top: 0.18, left: 0.25, width: 0.50, height: 0.48 },
+  },
+  hoodie: {
+    front: { top: 0.20, left: 0.25, width: 0.50, height: 0.42 },
+    back:  { top: 0.16, left: 0.25, width: 0.50, height: 0.45 },
+  },
+  crewneck: {
+    front: { top: 0.22, left: 0.25, width: 0.50, height: 0.42 },
+    back:  { top: 0.18, left: 0.25, width: 0.50, height: 0.45 },
+  },
 };
 
-const GARMENT_IMAGES: Record<string, string> = {
-  tshirt:   '/garments/tshirt-white.jpg',
-  hoodie:   '/garments/hoodie-white.jpg',
-  crewneck: '/garments/crewneck-white.jpg',
+const GARMENT_IMAGES: Record<string, Record<Side, string>> = {
+  tshirt:   { front: '/garments/tshirt-white.jpg',   back: '/garments/tshirt-white-back.jpg' },
+  hoodie:   { front: '/garments/hoodie-white.jpg',   back: '/garments/hoodie-white-back.jpg' },
+  crewneck: { front: '/garments/crewneck-white.jpg', back: '/garments/crewneck-white-back.jpg' },
 };
 
 export interface ArtworkTransform {
-  xPct: number;   // center X within print area, 0–1
-  yPct: number;   // center Y within print area, 0–1
+  xPct: number;     // center X within print area, 0–1
+  yPct: number;     // center Y within print area, 0–1
   scalePct: number; // 10–150
 }
 
 interface Props {
   garmentType: string;
+  side?: Side;
   artworkUrl: string | null;
   transform: ArtworkTransform;
   onTransformChange?: (t: ArtworkTransform) => void;
@@ -32,6 +44,7 @@ interface Props {
 
 export default function GarmentPreview({
   garmentType,
+  side = 'front',
   artworkUrl,
   transform,
   onTransformChange,
@@ -48,8 +61,10 @@ export default function GarmentPreview({
     startYPct: number;
   }>({ dragging: false, startX: 0, startY: 0, startXPct: 0, startYPct: 0 });
 
-  const area = PRINT_AREA[garmentType] ?? PRINT_AREA.tshirt;
-  const garmentSrc = GARMENT_IMAGES[garmentType] ?? GARMENT_IMAGES.tshirt;
+  const garmentDef = PRINT_AREA[garmentType] ?? PRINT_AREA.tshirt;
+  const area = garmentDef[side];
+  const garmentImages = GARMENT_IMAGES[garmentType] ?? GARMENT_IMAGES.tshirt;
+  const garmentSrc = garmentImages[side];
 
   // Artwork natural aspect ratio
   const [artAspect, setArtAspect] = useState(1);
@@ -68,12 +83,12 @@ export default function GarmentPreview({
 
     // Position: center of artwork within print area
     const leftPct = area.left * 100 + area.width * 100 * transform.xPct - artWidthPct / 2;
-    const topPct = area.top * 100 + area.height * 100 * transform.yPct - artHeightPct / 2;
+    const topPct  = area.top  * 100 + area.height * 100 * transform.yPct - artHeightPct / 2;
 
     return {
-      left: `${leftPct}%`,
-      top: `${topPct}%`,
-      width: `${artWidthPct}%`,
+      left:   `${leftPct}%`,
+      top:    `${topPct}%`,
+      width:  `${artWidthPct}%`,
       height: 'auto',
     };
   }
@@ -94,7 +109,7 @@ export default function GarmentPreview({
     function onMouseMove(e: MouseEvent) {
       if (!dragState.current.dragging || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const printW = area.width * rect.width;
+      const printW = area.width  * rect.width;
       const printH = area.height * rect.height;
       const dx = (e.clientX - dragState.current.startX) / printW;
       const dy = (e.clientY - dragState.current.startY) / printH;
@@ -134,7 +149,7 @@ export default function GarmentPreview({
     const onChange = onTransformChange;
     const touch = e.touches[0];
     const rect = containerRef.current.getBoundingClientRect();
-    const printW = area.width * rect.width;
+    const printW = area.width  * rect.width;
     const printH = area.height * rect.height;
     const dx = (touch.clientX - dragState.current.startX) / printW;
     const dy = (touch.clientY - dragState.current.startY) / printH;
@@ -150,7 +165,7 @@ export default function GarmentPreview({
       {/* Garment image */}
       <img
         src={garmentSrc}
-        alt={garmentType}
+        alt={`${garmentType} ${side}`}
         className="w-full h-full object-contain"
         draggable={false}
       />
@@ -160,9 +175,9 @@ export default function GarmentPreview({
         <div
           className="absolute border-2 border-dashed border-[#01696f]/40 rounded pointer-events-none"
           style={{
-            left: `${area.left * 100}%`,
-            top: `${area.top * 100}%`,
-            width: `${area.width * 100}%`,
+            left:   `${area.left   * 100}%`,
+            top:    `${area.top    * 100}%`,
+            width:  `${area.width  * 100}%`,
             height: `${area.height * 100}%`,
           }}
         >
@@ -198,9 +213,9 @@ export default function GarmentPreview({
         <div
           className="absolute flex items-center justify-center"
           style={{
-            left: `${area.left * 100}%`,
-            top: `${area.top * 100}%`,
-            width: `${area.width * 100}%`,
+            left:   `${area.left   * 100}%`,
+            top:    `${area.top    * 100}%`,
+            width:  `${area.width  * 100}%`,
             height: `${area.height * 100}%`,
           }}
         >
