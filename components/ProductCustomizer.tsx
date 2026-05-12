@@ -122,17 +122,17 @@ export default function ProductCustomizer({ product }: { product: Product }) {
 
             {/* Main garment preview with artwork overlay */}
             <div className="relative rounded-2xl overflow-hidden bg-white border border-gray-200 aspect-square">
-              {/* Product photo (if admin uploaded images) */}
-              {activeImage && !artworkUrl && (
+              {/* Always show garment preview — it shows the product photo when no artwork,
+                  and composites artwork over the garment mockup when uploaded */}
+              {activeImage && !artworkUrl ? (
+                // Show admin product photo when no design uploaded yet
                 <img
                   src={activeImage.storageUrl}
                   alt={activeImage.altText ?? product.title}
                   className="w-full h-full object-cover"
                 />
-              )}
-
-              {/* Garment + artwork preview */}
-              {(artworkUrl || !activeImage) && (
+              ) : (
+                // Show garment mockup with artwork composited on top
                 <GarmentPreview
                   garmentType={product.productType}
                   artworkUrl={artworkUrl}
