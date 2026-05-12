@@ -43,7 +43,7 @@ export default async function OrderHistoryPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader />
+      <AccountHeader email={session.user.email} />
       <div className="max-w-5xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold text-gray-900 mb-8">Order History</h1>
 

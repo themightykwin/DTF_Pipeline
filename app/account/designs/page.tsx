@@ -33,7 +33,7 @@ export default async function MyDesignsPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader />
+      <AccountHeader email={session.user.email} />
       <div className="max-w-5xl mx-auto px-6 py-10">
         <div className="flex items-center justify-between mb-8">
           <div>

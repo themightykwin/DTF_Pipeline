@@ -12,7 +12,7 @@ const NAV_LINKS = [
 ];
 
 interface AccountHeaderProps {
-  email: string;
+  email?: string;
 }
 
 export default function AccountHeader({ email }: AccountHeaderProps) {
