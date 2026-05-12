@@ -59,10 +59,12 @@ export default function GarmentPreview({
   }, [artworkUrl]);
 
   function getArtStyle() {
+    // Must match DesignerModal.getArtworkStyle exactly so PDP preview
+    // shows the design in the same position/size as the designer canvas.
     const scale = transform.scalePct / 100;
-    const artWidthPct = 80 * scale;
-    const artHeightPct = artWidthPct * artAspect * (area.width / area.height);
-    const leftPct = area.left * 100 + area.width * 100 * transform.xPct - artWidthPct / 2;
+    const artWidthPct  = area.width * 100 * scale;    // % of container width
+    const artHeightPct = artWidthPct * artAspect;     // same coordinate space
+    const leftPct = area.left * 100 + area.width  * 100 * transform.xPct - artWidthPct  / 2;
     const topPct  = area.top  * 100 + area.height * 100 * transform.yPct - artHeightPct / 2;
     return {
       left:   `${leftPct}%`,

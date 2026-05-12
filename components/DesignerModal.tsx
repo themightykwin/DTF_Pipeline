@@ -163,14 +163,16 @@ export default function DesignerModal({
   function zoomFit() { setZoom(DEFAULT_ZOOM); }
 
   // ── Artwork position calc ──
+  // artWidthPct  = scalePct% of the print-area width, expressed as % of full canvas
+  // artHeightPct = artWidthPct × natural aspect ratio (no extra area correction needed)
   function getArtworkStyle(side: Side) {
     const s = sides[side];
     const a = (PRINT_AREA[productType] ?? PRINT_AREA.tshirt)[side];
     const scale = s.transform.scalePct / 100;
-    const artWidthPct  = a.width * 80 * scale;
-    const artHeightPct = artWidthPct * s.artAspect * (a.width / a.height);
-    const leftPct = a.left  * 100 + a.width  * 100 * s.transform.xPct - artWidthPct  / 2;
-    const topPct  = a.top   * 100 + a.height * 100 * s.transform.yPct - artHeightPct / 2;
+    const artWidthPct  = a.width * 100 * scale;          // % of full canvas width
+    const artHeightPct = artWidthPct * s.artAspect;       // % of full canvas width (height in same space)
+    const leftPct = a.left   * 100 + a.width  * 100 * s.transform.xPct - artWidthPct  / 2;
+    const topPct  = a.top    * 100 + a.height * 100 * s.transform.yPct - artHeightPct / 2;
     return { left: `${leftPct}%`, top: `${topPct}%`, width: `${artWidthPct}%` };
   }
 

@@ -176,7 +176,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
                   <img
                     src={activeImage.storageUrl}
                     alt={activeImage.altText ?? product.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 )
               ) : (
@@ -251,7 +251,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
                         : 'border-gray-200 hover:border-gray-400'
                     }`}
                   >
-                    <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-cover" />
+                    <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-contain bg-white" />
                   </button>
                 ))}
               </div>
