@@ -115,8 +115,7 @@ export default function ProductCustomizer({ product }: { product: Product }) {
       const res = await fetch('/api/customer/auth/me');
       if (res.ok) {
         const json = await res.json() as { ok: boolean; user?: { id: string } };
-        if (json.ok && json.data?.id) return json.data.id;
-        if (json.ok && (json as any).user?.id) return (json as any).user.id;
+        if (json.ok && json.user?.id) return json.user.id;
       }
     } catch {}
     return 'demo-user';
