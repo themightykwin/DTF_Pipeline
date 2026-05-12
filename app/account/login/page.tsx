@@ -1,12 +1,11 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 // Inner component — uses useSearchParams, must be wrapped in Suspense
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get('next') ?? '/account';
 
@@ -27,8 +26,9 @@ function LoginForm() {
       });
       const json = await res.json() as { ok: boolean; error?: { message: string } };
       if (!json.ok) { setError(json.error?.message ?? 'Login failed.'); return; }
-      router.push(next);
-      router.refresh();
+      // Hard navigate so the browser sends the new session cookie on the next request.
+      // router.push alone won't work because Next.js client nav doesn't re-read httpOnly cookies.
+      window.location.href = next;
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {
