@@ -30,7 +30,8 @@ const MIN_SCALE = 10;
 const MAX_SCALE = 160;
 
 // Zoom levels the +/- buttons snap through
-const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
+const DEFAULT_ZOOM = 2.0;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export default function DesignerModal({
 }: Props) {
   const [activeSide, setActiveSide] = useState<Side>('front');
   const [canvasImageIdx, setCanvasImageIdx] = useState(activeImageIdx);
-  const [zoom, setZoom] = useState(1.0);  // canvas CSS scale factor
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
 
   const [sides, setSides] = useState<Record<Side, SideState>>({
     front: initialDesign?.front
@@ -116,7 +117,9 @@ export default function DesignerModal({
   const area = (PRINT_AREA[productType] ?? PRINT_AREA.tshirt)[activeSide];
   const canvasImage = productImages[canvasImageIdx] ?? productImages[0];
 
-  // Canvas logical size (pre-zoom). Large enough for fine-grained placement.
+  // Canvas logical size (pre-zoom). Zoom is applied via CSS transform;
+  // the scroll container is sized to CANVAS_SIZE * zoom so the browser
+  // actually allocates scroll space for the full painted area.
   const CANVAS_SIZE = 700;
 
   // Lock body scroll
@@ -157,7 +160,7 @@ export default function DesignerModal({
       return prev ?? ZOOM_STEPS[0];
     });
   }
-  function zoomFit() { setZoom(1.0); }
+  function zoomFit() { setZoom(DEFAULT_ZOOM); }
 
   // ── Artwork position calc ──
   function getArtworkStyle(side: Side) {
@@ -288,6 +291,8 @@ export default function DesignerModal({
   const hasAnyDesign = !!(sides.front.artUploadId || sides.back.artUploadId);
   const artStyle = getArtworkStyle(activeSide);
   const zoomPct = Math.round(zoom * 100);
+  // Actual painted size after CSS scale — used to size the scroll container
+  const scaledSize = CANVAS_SIZE * zoom;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#1a1a1a]">
@@ -401,7 +406,7 @@ export default function DesignerModal({
               <button
                 onClick={zoomFit}
                 className="px-3 h-8 flex items-center justify-center rounded-lg text-xs font-mono text-gray-300 hover:text-white hover:bg-white/10 transition-colors min-w-[52px]"
-                title="Reset zoom"
+                title={zoom === DEFAULT_ZOOM ? 'Fit (default)' : 'Reset to fit'}
               >
                 {zoomPct}%
               </button>
@@ -419,23 +424,30 @@ export default function DesignerModal({
           {/* ── Scrollable canvas viewport ── */}
           <div
             ref={viewportRef}
-            className="flex-1 overflow-auto flex items-center justify-center"
-            style={{ padding: zoom > 1 ? '40px' : '24px' }}
+            className="flex-1 overflow-auto"
+            style={{ padding: '40px' }}
           >
-            {/* Canvas card — fixed logical size, zoom applied via transform */}
+            {/*
+              Outer wrapper is sized to the *scaled* dimensions so the
+              scrollbar tracks the full painted area. The inner canvas card
+              is transformed to match, anchored at top-left via origin-top-left.
+            */}
+            <div
+              className="relative mx-auto"
+              style={{ width: `${scaledSize}px`, height: `${scaledSize}px` }}
+            >
+            {/* Canvas card — fixed logical size, zoom via CSS transform */}
             <div
               ref={canvasRef}
               onClick={(e) => {
                 const target = e.target as HTMLElement;
                 if (target === canvasRef.current || target.dataset.garment) setSelected(false);
               }}
-              className="relative bg-white rounded-2xl shadow-2xl overflow-hidden flex-shrink-0 origin-center transition-transform duration-150"
+              className="absolute top-0 left-0 bg-white rounded-2xl shadow-2xl overflow-hidden origin-top-left transition-transform duration-150"
               style={{
                 width:  `${CANVAS_SIZE}px`,
                 height: `${CANVAS_SIZE}px`,
                 transform: `scale(${zoom})`,
-                // When zoomed in, the scaled element needs space; margin compensates
-                margin: zoom > 1 ? `${(zoom - 1) * CANVAS_SIZE / 2}px` : undefined,
               }}
             >
               {/* Product photo — z-index 0 */}
@@ -535,7 +547,8 @@ export default function DesignerModal({
                 </div>
               )}
             </div>
-          </div>
+            </div>{/* end scroll wrapper */}
+          </div>{/* end viewport */}
 
           {/* ── Image thumbnail strip ── */}
           {productImages.length > 1 && (
