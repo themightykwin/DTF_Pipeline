@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { verifyCustomerTokenEdge } from '@/lib/customer-session-edge';
+import { jwtVerify } from 'jose';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -36,8 +36,15 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    const payload = await verifyCustomerTokenEdge(sessionToken);
-    if (!payload) {
+    let payload: { userId?: string } | null = null;
+    try {
+      const secret = new TextEncoder().encode(
+        process.env.CUSTOMER_SESSION_SECRET ?? process.env.NEXTAUTH_SECRET ?? 'change-me-in-prod'
+      );
+      const { payload: p } = await jwtVerify(sessionToken, secret);
+      payload = p as { userId?: string };
+    } catch {}
+    if (!payload?.userId) {
       const loginUrl = new URL('/account/login', req.url);
       loginUrl.searchParams.set('next', pathname);
       return NextResponse.redirect(loginUrl);
