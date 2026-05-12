@@ -383,7 +383,7 @@ export default function DesignerModal({
         )}
 
         {/* ── Canvas area ── */}
-        <div className="flex-1 flex flex-col items-center justify-center bg-[#2a2a2a] overflow-hidden p-4 gap-4">
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#2a2a2a] overflow-hidden p-2 gap-3">
 
           {/* Front / Back switcher */}
           <div className="flex items-center gap-1 bg-[#111] rounded-xl p-1 flex-shrink-0">
@@ -417,7 +417,7 @@ export default function DesignerModal({
               if (target === canvasRef.current || target.dataset.garment) setSelected(false);
             }}
             className="relative bg-white rounded-2xl shadow-2xl overflow-hidden flex-shrink-0"
-            style={{ width: 'min(65vh, 600px)', height: 'min(65vh, 600px)' }}
+            style={{ width: 'min(82vh, 860px)', height: 'min(82vh, 860px)' }}
           >
             {/* Product photo — z-index 0 */}
             {canvasImage && (
