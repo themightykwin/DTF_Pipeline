@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
 
     const { url, publicId } = await uploadArtwork(buffer, file.name, userId);
 
+    // Upsert a placeholder user so the FK constraint is satisfied for demo/anonymous uploads
+    await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId, email: `${userId}@demo.dtfpipeline.com`, name: 'Demo User' },
+    });
+
     const artUpload = await prisma.artUpload.create({
       data: {
         userId,
