@@ -2,28 +2,12 @@
 
 import { useRef, useEffect, useState } from 'react';
 
-type Side = 'front' | 'back';
-
-// Print area as % of garment image dimensions — per side
-const PRINT_AREA: Record<string, Record<Side, { top: number; left: number; width: number; height: number }>> = {
-  tshirt: {
-    front: { top: 0.22, left: 0.25, width: 0.50, height: 0.45 },
-    back:  { top: 0.18, left: 0.25, width: 0.50, height: 0.48 },
-  },
-  hoodie: {
-    front: { top: 0.20, left: 0.25, width: 0.50, height: 0.42 },
-    back:  { top: 0.16, left: 0.25, width: 0.50, height: 0.45 },
-  },
-  crewneck: {
-    front: { top: 0.22, left: 0.25, width: 0.50, height: 0.42 },
-    back:  { top: 0.18, left: 0.25, width: 0.50, height: 0.45 },
-  },
-};
-
-const GARMENT_IMAGES: Record<string, Record<Side, string>> = {
-  tshirt:   { front: '/garments/tshirt-white.jpg',   back: '/garments/tshirt-white-back.jpg' },
-  hoodie:   { front: '/garments/hoodie-white.jpg',   back: '/garments/hoodie-white-back.jpg' },
-  crewneck: { front: '/garments/crewneck-white.jpg', back: '/garments/crewneck-white-back.jpg' },
+// Print area as % of image dimensions — used to constrain artwork positioning.
+// These are sensible defaults; the real source of truth is the designer canvas.
+const PRINT_AREA: Record<string, { top: number; left: number; width: number; height: number }> = {
+  tshirt:   { top: 0.22, left: 0.25, width: 0.50, height: 0.45 },
+  hoodie:   { top: 0.20, left: 0.25, width: 0.50, height: 0.42 },
+  crewneck: { top: 0.22, left: 0.25, width: 0.50, height: 0.42 },
 };
 
 export interface ArtworkTransform {
@@ -33,8 +17,10 @@ export interface ArtworkTransform {
 }
 
 interface Props {
+  /** The product photo to show as the base garment image */
+  imageSrc: string;
+  imageAlt?: string;
   garmentType: string;
-  side?: Side;
   artworkUrl: string | null;
   transform: ArtworkTransform;
   onTransformChange?: (t: ArtworkTransform) => void;
@@ -43,8 +29,9 @@ interface Props {
 }
 
 export default function GarmentPreview({
+  imageSrc,
+  imageAlt = 'Product',
   garmentType,
-  side = 'front',
   artworkUrl,
   transform,
   onTransformChange,
@@ -52,7 +39,6 @@ export default function GarmentPreview({
   className = '',
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const artRef = useRef<HTMLImageElement>(null);
   const dragState = useRef<{
     dragging: boolean;
     startX: number;
@@ -61,12 +47,9 @@ export default function GarmentPreview({
     startYPct: number;
   }>({ dragging: false, startX: 0, startY: 0, startXPct: 0, startYPct: 0 });
 
-  const garmentDef = PRINT_AREA[garmentType] ?? PRINT_AREA.tshirt;
-  const area = garmentDef[side];
-  const garmentImages = GARMENT_IMAGES[garmentType] ?? GARMENT_IMAGES.tshirt;
-  const garmentSrc = garmentImages[side];
+  const area = PRINT_AREA[garmentType] ?? PRINT_AREA.tshirt;
 
-  // Artwork natural aspect ratio
+  // Track artwork aspect ratio
   const [artAspect, setArtAspect] = useState(1);
   useEffect(() => {
     if (!artworkUrl) return;
@@ -77,14 +60,10 @@ export default function GarmentPreview({
 
   function getArtStyle() {
     const scale = transform.scalePct / 100;
-    // Art width relative to print area width
-    const artWidthPct = 80 * scale; // 80% of print area at scale 1
+    const artWidthPct = 80 * scale;
     const artHeightPct = artWidthPct * artAspect * (area.width / area.height);
-
-    // Position: center of artwork within print area
     const leftPct = area.left * 100 + area.width * 100 * transform.xPct - artWidthPct / 2;
     const topPct  = area.top  * 100 + area.height * 100 * transform.yPct - artHeightPct / 2;
-
     return {
       left:   `${leftPct}%`,
       top:    `${topPct}%`,
@@ -93,7 +72,7 @@ export default function GarmentPreview({
     };
   }
 
-  // Drag handlers
+  // Mouse drag
   function onMouseDown(e: React.MouseEvent) {
     if (!interactive || !onTransformChange) return;
     e.preventDefault();
@@ -105,55 +84,40 @@ export default function GarmentPreview({
       startXPct: transform.xPct,
       startYPct: transform.yPct,
     };
-
-    function onMouseMove(e: MouseEvent) {
+    function onMouseMove(ev: MouseEvent) {
       if (!dragState.current.dragging || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const printW = area.width  * rect.width;
-      const printH = area.height * rect.height;
-      const dx = (e.clientX - dragState.current.startX) / printW;
-      const dy = (e.clientY - dragState.current.startY) / printH;
+      const dx = (ev.clientX - dragState.current.startX) / (area.width  * rect.width);
+      const dy = (ev.clientY - dragState.current.startY) / (area.height * rect.height);
       onChange({
         ...transform,
         xPct: Math.min(1, Math.max(0, dragState.current.startXPct + dx)),
         yPct: Math.min(1, Math.max(0, dragState.current.startYPct + dy)),
       });
     }
-
     function onMouseUp() {
       dragState.current.dragging = false;
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     }
-
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   }
 
-  // Touch handlers
+  // Touch drag
   function onTouchStart(e: React.TouchEvent) {
     if (!interactive || !onTransformChange) return;
-    const touch = e.touches[0];
-    dragState.current = {
-      dragging: true,
-      startX: touch.clientX,
-      startY: touch.clientY,
-      startXPct: transform.xPct,
-      startYPct: transform.yPct,
-    };
+    const t = e.touches[0];
+    dragState.current = { dragging: true, startX: t.clientX, startY: t.clientY, startXPct: transform.xPct, startYPct: transform.yPct };
   }
-
   function onTouchMove(e: React.TouchEvent) {
     if (!dragState.current.dragging || !containerRef.current || !onTransformChange) return;
     e.preventDefault();
-    const onChange = onTransformChange;
     const touch = e.touches[0];
     const rect = containerRef.current.getBoundingClientRect();
-    const printW = area.width  * rect.width;
-    const printH = area.height * rect.height;
-    const dx = (touch.clientX - dragState.current.startX) / printW;
-    const dy = (touch.clientY - dragState.current.startY) / printH;
-    onChange({
+    const dx = (touch.clientX - dragState.current.startX) / (area.width  * rect.width);
+    const dy = (touch.clientY - dragState.current.startY) / (area.height * rect.height);
+    onTransformChange({
       ...transform,
       xPct: Math.min(1, Math.max(0, dragState.current.startXPct + dx)),
       yPct: Math.min(1, Math.max(0, dragState.current.startYPct + dy)),
@@ -162,15 +126,16 @@ export default function GarmentPreview({
 
   return (
     <div ref={containerRef} className={`relative select-none ${className}`}>
-      {/* Garment image */}
+      {/* Base product photo — z-0 */}
       <img
-        src={garmentSrc}
-        alt={`${garmentType} ${side}`}
+        src={imageSrc}
+        alt={imageAlt}
         className="w-full h-full object-contain"
         draggable={false}
+        style={{ position: 'relative', zIndex: 0 }}
       />
 
-      {/* Print area overlay (visible in interactive mode) */}
+      {/* Print area dashed guide — z-10, pointer-events-none */}
       {interactive && (
         <div
           className="absolute border-2 border-dashed border-[#01696f]/40 rounded pointer-events-none"
@@ -179,6 +144,7 @@ export default function GarmentPreview({
             top:    `${area.top    * 100}%`,
             width:  `${area.width  * 100}%`,
             height: `${area.height * 100}%`,
+            zIndex: 10,
           }}
         >
           <span className="absolute -top-5 left-0 text-[10px] text-[#01696f]/60 font-medium whitespace-nowrap">
@@ -187,10 +153,9 @@ export default function GarmentPreview({
         </div>
       )}
 
-      {/* Artwork overlay */}
+      {/* Artwork overlay — z-20, always above garment */}
       {artworkUrl && (
         <img
-          ref={artRef}
           src={artworkUrl}
           alt="Design artwork"
           onMouseDown={onMouseDown}
@@ -198,25 +163,27 @@ export default function GarmentPreview({
           onTouchMove={onTouchMove}
           onTouchEnd={() => { dragState.current.dragging = false; }}
           draggable={false}
-          className={`absolute object-contain pointer-events-auto ${
+          className={`absolute object-contain ${
             interactive ? 'cursor-grab active:cursor-grabbing' : 'pointer-events-none'
           }`}
           style={{
             ...getArtStyle(),
             mixBlendMode: 'multiply',
+            zIndex: 20,
           }}
         />
       )}
 
-      {/* No artwork placeholder */}
+      {/* Placeholder text when no design */}
       {!artworkUrl && (
         <div
-          className="absolute flex items-center justify-center"
+          className="absolute flex items-center justify-center pointer-events-none"
           style={{
             left:   `${area.left   * 100}%`,
             top:    `${area.top    * 100}%`,
             width:  `${area.width  * 100}%`,
             height: `${area.height * 100}%`,
+            zIndex: 10,
           }}
         >
           <span className="text-xs text-gray-300 font-medium text-center leading-tight px-2">
