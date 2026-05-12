@@ -48,7 +48,8 @@ export default async function CartPage() {
       (sum, sizeMap) => sum + Object.values(sizeMap).reduce((s, q) => s + q, 0),
       0
     );
-    const priceCents = item.configuration.catalogProduct.basePriceCents * totalUnits;
+    const basePriceCents = item.configuration.catalogProduct?.basePriceCents ?? 0;
+    const priceCents = basePriceCents * totalUnits;
     return { ...item, quantities, selectedColors, totalUnits, priceCents };
   });
 
@@ -88,6 +89,7 @@ export default async function CartPage() {
             {/* Cart items */}
             {enriched.map((item) => {
               const product = item.configuration.catalogProduct;
+              if (!product) return null;
               const image = product.images[0];
               const artUrl = item.configuration.artUpload?.storageUrl;
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
-import { verifyCustomerToken } from '@/lib/customer-auth';
+import { verifyCustomerTokenEdge } from '@/lib/customer-session-edge';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -36,7 +36,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    const payload = await verifyCustomerToken(sessionToken);
+    const payload = await verifyCustomerTokenEdge(sessionToken);
     if (!payload) {
       const loginUrl = new URL('/account/login', req.url);
       loginUrl.searchParams.set('next', pathname);
