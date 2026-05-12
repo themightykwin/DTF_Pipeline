@@ -168,7 +168,6 @@ export default function GarmentPreview({
           }`}
           style={{
             ...getArtStyle(),
-            mixBlendMode: 'multiply',
             zIndex: 20,
           }}
         />

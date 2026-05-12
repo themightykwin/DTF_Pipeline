@@ -484,7 +484,7 @@ export default function DesignerModal({
                       onTouchStart={startMove}
                       onClick={(e) => { e.stopPropagation(); setSelected(true); }}
                       className="w-full h-auto block select-none"
-                      style={{ mixBlendMode: 'multiply', cursor: selected ? 'grab' : 'pointer' }}
+                      style={{ cursor: selected ? 'grab' : 'pointer' }}
                     />
                     {selected && (
                       <>
