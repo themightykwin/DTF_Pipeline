@@ -15,7 +15,7 @@ const DEFAULT_COLORS = [
 interface ProductFormProps {
   product?: {
     id: string;
-    shopId: string;
+    shopId?: string;
     title: string;
     description?: string | null;
     productType: string;
@@ -61,7 +61,6 @@ export default function ProductForm({ product }: ProductFormProps) {
     setError('');
 
     const payload = {
-      shopId: product?.shopId ?? (process.env.NEXT_PUBLIC_DEFAULT_SHOP_ID ?? ''),
       title,
       description: description || undefined,
       productType,

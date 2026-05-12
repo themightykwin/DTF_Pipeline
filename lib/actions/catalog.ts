@@ -8,7 +8,7 @@ import { requireAdminSession } from '@/lib/admin-auth';
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const catalogProductSchema = z.object({
-  shopId: z.string().cuid(),
+  shopId: z.string().cuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']),

@@ -174,8 +174,8 @@ model ArtUpload {
 // ─── Admin-managed catalog products ───────────────────────────────────────
 model CatalogProduct {
   id              String   @id @default(cuid())
-  shopId          String
-  shop            Shop     @relation(fields: [shopId], references: [id])
+  shopId          String?
+  shop            Shop?    @relation(fields: [shopId], references: [id])
   title           String
   description     String?
   productType     String   // e.g. "tshirt" | "hoodie" | "crewneck"
@@ -190,7 +190,7 @@ model CatalogProduct {
   images         CatalogProductImage[]
   configurations ProductConfiguration[]
 
-  @@index([shopId, status])
+  @@index([status])
   @@map("catalog_products")
 }
 
