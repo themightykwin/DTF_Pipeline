@@ -26,7 +26,8 @@ model Shop {
   orders           Order[]
   webhookEvents    WebhookEvent[]
   auditLogs        AuditLog[]
-  catalogProducts  CatalogProduct[]
+  catalogProducts   CatalogProduct[]
+  configurations    ProductConfiguration[]
 
   @@map("shops")
 }
@@ -136,7 +137,7 @@ model ShopCustomer {
 // ─── Garment types and print rules ────────────────────────────────────────
 model GarmentTemplate {
   id               String  @id @default(cuid())
-  garmentType      String  // tshirt | hoodie | crewneck
+  garmentType      String  @unique // tshirt | hoodie | crewneck
   label            String
   availableSizes   String  // JSON array e.g. ["XXS","XS","S","M","L","XL","2X","3X","4X","5X"]
   maxPrintWidthIn  Float
@@ -231,6 +232,7 @@ model ProductConfiguration {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  shop            Shop            @relation(fields: [shopId], references: [id])
   user            User            @relation(fields: [userId], references: [id])
   garmentTemplate GarmentTemplate @relation(fields: [garmentTemplateId], references: [id])
   artUpload       ArtUpload?      @relation(fields: [artUploadId], references: [id])

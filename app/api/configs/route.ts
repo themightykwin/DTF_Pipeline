@@ -4,12 +4,19 @@ import crypto from 'crypto';
 
 const DEMO_SHOP_DOMAIN = 'demo.dtfpipeline.com';
 
+// Default print dimensions per garment type (inches)
+const GARMENT_DEFAULTS: Record<string, { label: string; maxPrintWidthIn: number; maxPrintHeightIn: number }> = {
+  tshirt:   { label: 'T-Shirt',    maxPrintWidthIn: 12, maxPrintHeightIn: 14 },
+  hoodie:   { label: 'Hoodie',     maxPrintWidthIn: 12, maxPrintHeightIn: 14 },
+  crewneck: { label: 'Crewneck',   maxPrintWidthIn: 12, maxPrintHeightIn: 14 },
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as {
       shopDomain?: string;
       userId: string;
-      garmentTemplateId: string;
+      garmentTemplateId: string; // We receive productType here (e.g. "tshirt")
       artUploadId?: string;
       catalogProductId?: string;
       inputs: Record<string, unknown>;
@@ -19,9 +26,9 @@ export async function POST(req: NextRequest) {
     };
 
     const {
-      shopDomain = DEMO_SHOP_DOMAIN,
+      shopDomain,
       userId,
-      garmentTemplateId,
+      garmentTemplateId: garmentType, // treat as garmentType string, not a DB id
       artUploadId,
       catalogProductId,
       inputs,
@@ -30,22 +37,26 @@ export async function POST(req: NextRequest) {
       priceSnapshot,
     } = body;
 
-    // Upsert shop — for the demo flow this creates a placeholder shop row
-    // so saves work without a real Shopify installation.
+    const resolvedShopDomain =
+      !shopDomain || shopDomain === 'your-store.myshopify.com'
+        ? DEMO_SHOP_DOMAIN
+        : shopDomain;
+
+    // 1. Upsert demo shop
     const shop = await prisma.shop.upsert({
-      where: { shopDomain: shopDomain === 'your-store.myshopify.com' ? DEMO_SHOP_DOMAIN : shopDomain },
+      where:  { shopDomain: resolvedShopDomain },
       update: {},
       create: {
-        shopDomain: shopDomain === 'your-store.myshopify.com' ? DEMO_SHOP_DOMAIN : shopDomain,
+        shopDomain: resolvedShopDomain,
         accessTokenEncrypted: 'demo',
         scopes: 'demo',
         isActive: true,
       },
     });
 
-    // Upsert demo user (same guard as /api/upload)
+    // 2. Upsert demo user
     await prisma.user.upsert({
-      where: { id: userId },
+      where:  { id: userId },
       update: {},
       create: {
         id: userId,
@@ -54,19 +65,36 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const configJson = JSON.stringify({ garmentTemplateId, artUploadId, inputs, scalePercent, yPercent });
-    const configHash = crypto.createHash('sha256').update(configJson).digest('hex');
+    // 3. Upsert GarmentTemplate by garmentType — required FK on ProductConfiguration
+    const defaults = GARMENT_DEFAULTS[garmentType] ?? GARMENT_DEFAULTS.tshirt;
+    const garmentTemplate = await prisma.garmentTemplate.upsert({
+      where:  { garmentType },
+      update: {},
+      create: {
+        garmentType,
+        label:            defaults.label,
+        maxPrintWidthIn:  defaults.maxPrintWidthIn,
+        maxPrintHeightIn: defaults.maxPrintHeightIn,
+        minDpi:           300,
+        isActive:         true,
+        availableSizes:   JSON.stringify(['S', 'M', 'L', 'XL', '2XL']),
+      },
+    });
+
+    // 4. Create the configuration
+    const configJson = JSON.stringify({ garmentType, artUploadId, inputs, scalePercent, yPercent });
+    const configHash  = crypto.createHash('sha256').update(configJson).digest('hex');
 
     const config = await prisma.productConfiguration.create({
       data: {
-        shopId: shop.id,
+        shopId:           shop.id,
         userId,
-        garmentTemplateId,
-        artUploadId: artUploadId ?? null,
+        garmentTemplateId: garmentTemplate.id,
+        artUploadId:      artUploadId ?? null,
         catalogProductId: catalogProductId ?? null,
         configJson,
         configHash,
-        priceSnapshot: priceSnapshot ?? null,
+        priceSnapshot:    priceSnapshot ?? null,
         scalePercent,
         yPercent,
         status: 'draft',
