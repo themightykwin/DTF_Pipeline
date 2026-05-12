@@ -21,7 +21,7 @@ async function importKey(secret: string): Promise<CryptoKey> {
   );
 }
 
-function base64urlDecode(str: string): Uint8Array {
+function base64urlDecode(str: string): ArrayBuffer {
   // pad to multiple of 4
   const padded = str.replace(/-/g, '+').replace(/_/g, '/');
   const pad = (4 - (padded.length % 4)) % 4;
@@ -29,7 +29,7 @@ function base64urlDecode(str: string): Uint8Array {
   const binary = atob(b64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
+  return bytes.buffer as ArrayBuffer;
 }
 
 export interface CustomerTokenPayload {
