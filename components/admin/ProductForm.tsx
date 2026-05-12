@@ -15,7 +15,7 @@ const DEFAULT_COLORS = [
 interface ProductFormProps {
   product?: {
     id: string;
-    shopId?: string;
+    shopId?: string | null;
     title: string;
     description?: string | null;
     productType: string;
