@@ -62,7 +62,7 @@ export default async function CartPage() {
 
   return (
     <div className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader email={user?.email ?? session.email} />
+      <AccountHeader email={user?.email ?? session.user.email} />
 
       <main className="max-w-4xl mx-auto px-6 py-10">
         <div className="mb-8">
