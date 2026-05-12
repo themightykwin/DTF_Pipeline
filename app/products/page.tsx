@@ -20,6 +20,8 @@ export default async function ProductsPage() {
           <Link href="/" className="text-lg font-bold text-gray-900 tracking-tight">DTF Pipeline</Link>
           <nav className="flex gap-6 text-sm text-gray-500">
             <Link href="/products" className="text-[#01696f] font-medium">Products</Link>
+            <Link href="/account" className="hover:text-gray-900 transition-colors">My Account</Link>
+            <Link href="/account/cart" className="hover:text-gray-900 transition-colors">Cart</Link>
             <Link href="/admin/login" className="hover:text-gray-900 transition-colors">Admin</Link>
           </nav>
         </div>

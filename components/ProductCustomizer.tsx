@@ -102,52 +102,131 @@ export default function ProductCustomizer({ product }: { product: Product }) {
     setActiveImageIdx(idx);
   }
 
-  // Save
-  const [submitState, setSubmitState] = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
-  const [configId, setConfigId] = useState<string | null>(null);
+  // ── Action state ──────────────────────────────────────────────────────────
+  const [saveState, setSaveState]   = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
+  const [cartState, setCartState]   = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
+  const [configId,  setConfigId]    = useState<string | null>(null);
+  const [saveError, setSaveError]   = useState('');
+  const [cartError, setCartError]   = useState('');
 
-  async function handleSave() {
-    if (!hasAnyDesign || totalUnits === 0) return;
-    setSubmitState('saving');
+  /** Fetch current customer session userId (or 'demo-user' as fallback) */
+  async function getSessionUserId(): Promise<string> {
     try {
-      const res = await fetch('/api/configs', {
+      const res = await fetch('/api/customer/auth/me');
+      if (res.ok) {
+        const json = await res.json() as { ok: boolean; user?: { id: string } };
+        if (json.ok && json.data?.id) return json.data.id;
+        if (json.ok && (json as any).user?.id) return (json as any).user.id;
+      }
+    } catch {}
+    return 'demo-user';
+  }
+
+  /** Build and save (or re-save) the ProductConfiguration, returning its ID */
+  async function saveConfiguration(): Promise<string | null> {
+    const userId = await getSessionUserId();
+    const res = await fetch('/api/configs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shopDomain: 'demo.dtfpipeline.com',
+        userId,
+        garmentTemplateId: product.productType,
+        artUploadId: design.front?.artUploadId ?? design.back?.artUploadId,
+        catalogProductId: product.id,
+        inputs: {
+          productType: product.productType,
+          selectedColors,
+          quantities,
+          front: design.front ? { transform: design.front.transform } : null,
+          back:  design.back  ? { transform: design.back.transform  } : null,
+        },
+        scalePercent: Math.round(
+          design.front?.transform.scalePct ?? design.back?.transform.scalePct ?? 80
+        ),
+        yPercent: Math.round(
+          (design.front?.transform.yPct ?? design.back?.transform.yPct ?? 0.4) * 100
+        ),
+        priceSnapshot: (product.basePriceCents / 100) * totalUnits,
+      }),
+    });
+    const json = await res.json() as { ok: boolean; data?: { configurationId: string }; error?: string };
+    if (json.ok && json.data?.configurationId) {
+      setConfigId(json.data.configurationId);
+      return json.data.configurationId;
+    }
+    return null;
+  }
+
+  /** Save Design — stores config + marks isSaved; redirects to login if 401 */
+  async function handleSaveDesign() {
+    if (!hasAnyDesign || totalUnits === 0) return;
+    setSaveState('saving');
+    setSaveError('');
+    try {
+      const cfgId = await saveConfiguration();
+      if (!cfgId) { setSaveState('error'); setSaveError('Could not save configuration.'); return; }
+
+      // Save to customer's account
+      const res = await fetch('/api/customer/designs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopDomain: 'your-store.myshopify.com',
-          userId: 'demo-user',
-          garmentTemplateId: product.productType,
-          artUploadId: design.front?.artUploadId ?? design.back?.artUploadId,
-          catalogProductId: product.id,
-          inputs: {
-            productType: product.productType,
-            selectedColors,
-            quantities,
-            front: design.front ? { transform: design.front.transform } : null,
-            back: design.back ? { transform: design.back.transform } : null,
-          },
-          scalePercent: Math.round(
-            design.front?.transform.scalePct ?? design.back?.transform.scalePct ?? 80
-          ),
-          yPercent: Math.round(
-            (design.front?.transform.yPct ?? design.back?.transform.yPct ?? 0.4) * 100
-          ),
-          priceSnapshot: (product.basePriceCents / 100) * totalUnits,
-        }),
+        body: JSON.stringify({ configurationId: cfgId }),
       });
-      const json = await res.json() as { ok: boolean; data: { configurationId: string } };
+      if (res.status === 401) {
+        // Not logged in — redirect to login, returning here after
+        window.location.href = `/account/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+      const json = await res.json() as { ok: boolean; error?: string };
       if (json.ok) {
-        setConfigId(json.data.configurationId);
-        setSubmitState('done');
+        setSaveState('done');
       } else {
-        setSubmitState('error');
+        setSaveState('error');
+        setSaveError(json.error ?? 'Failed to save design.');
       }
     } catch {
-      setSubmitState('error');
+      setSaveState('error');
+      setSaveError('Network error. Try again.');
     }
   }
 
-  const canSave = hasAnyDesign && totalUnits > 0;
+  /** Add to Cart — saves config then adds to staging cart; redirects to login if 401 */
+  async function handleAddToCart() {
+    if (!hasAnyDesign || totalUnits === 0) return;
+    setCartState('adding');
+    setCartError('');
+    try {
+      const cfgId = configId ?? await saveConfiguration();
+      if (!cfgId) { setCartState('error'); setCartError('Could not save configuration.'); return; }
+
+      const res = await fetch('/api/customer/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          configurationId: cfgId,
+          quantities,
+          selectedColors,
+        }),
+      });
+      if (res.status === 401) {
+        window.location.href = `/account/login?redirect=${encodeURIComponent(window.location.pathname)}`;
+        return;
+      }
+      const json = await res.json() as { ok: boolean; error?: string };
+      if (json.ok) {
+        setCartState('added');
+      } else {
+        setCartState('error');
+        setCartError(json.error ?? 'Failed to add to cart.');
+      }
+    } catch {
+      setCartState('error');
+      setCartError('Network error. Try again.');
+    }
+  }
+
+  const canAct = hasAnyDesign && totalUnits > 0;
 
   return (
     <>
@@ -355,30 +434,59 @@ export default function ProductCustomizer({ product }: { product: Product }) {
 
             {/* CTA */}
             <div className="flex flex-col gap-3 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={!canSave || submitState === 'saving'}
-                className="w-full py-4 rounded-xl bg-[#01696f] text-white font-semibold text-sm hover:bg-[#0c4e54] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                {submitState === 'saving'
-                  ? 'Saving…'
-                  : submitState === 'done'
-                  ? '✓ Design Saved'
-                  : totalUnits === 0
-                  ? 'Enter quantities to continue'
-                  : !hasAnyDesign
-                  ? 'Add your design to continue'
-                  : 'Save Design'}
-              </button>
-              {submitState === 'done' && configId && (
-                <p className="text-xs text-center text-green-700 font-medium">
-                  ✓ Saved — reference: {configId}
+              {/* Hint copy when not ready */}
+              {!canAct && (
+                <p className="text-xs text-center text-gray-400">
+                  {totalUnits === 0 && !hasAnyDesign
+                    ? 'Add a design and enter quantities to continue'
+                    : totalUnits === 0
+                    ? 'Enter quantities to continue'
+                    : 'Add your design to continue'}
                 </p>
               )}
-              {submitState === 'error' && (
-                <p className="text-xs text-center text-red-600">
-                  Something went wrong. Try again.
+
+              {/* Save Design */}
+              <button
+                onClick={handleSaveDesign}
+                disabled={!canAct || saveState === 'saving'}
+                className="w-full py-3.5 rounded-xl border-2 border-[#01696f] text-[#01696f] font-semibold text-sm hover:bg-[#01696f]/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saveState === 'saving'
+                  ? 'Saving…'
+                  : saveState === 'done'
+                  ? '✓ Design Saved'
+                  : 'Save Design'}
+              </button>
+              {saveState === 'done' && (
+                <p className="text-xs text-center text-green-700 font-medium">
+                  ✓ Saved to your account —{' '}
+                  <a href="/account/designs" className="underline hover:text-green-900">view designs</a>
                 </p>
+              )}
+              {saveState === 'error' && (
+                <p className="text-xs text-center text-red-600">{saveError || 'Something went wrong.'}</p>
+              )}
+
+              {/* Add to Cart */}
+              <button
+                onClick={handleAddToCart}
+                disabled={!canAct || cartState === 'adding'}
+                className="w-full py-4 rounded-xl bg-[#01696f] text-white font-semibold text-sm hover:bg-[#0c4e54] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+              >
+                {cartState === 'adding'
+                  ? 'Adding…'
+                  : cartState === 'added'
+                  ? '✓ Added to Cart'
+                  : 'Add to Cart'}
+              </button>
+              {cartState === 'added' && (
+                <p className="text-xs text-center text-green-700 font-medium">
+                  ✓ In your cart —{' '}
+                  <a href="/account/cart" className="underline hover:text-green-900">view cart</a>
+                </p>
+              )}
+              {cartState === 'error' && (
+                <p className="text-xs text-center text-red-600">{cartError || 'Something went wrong.'}</p>
               )}
             </div>
           </div>

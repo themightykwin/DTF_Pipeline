@@ -34,6 +34,8 @@ export default async function ProductPage({ params }: Props) {
           <Link href="/" className="text-lg font-bold text-gray-900 tracking-tight">DTF Pipeline</Link>
           <nav className="flex gap-6 text-sm text-gray-500">
             <Link href="/products" className="hover:text-gray-900 transition-colors">← All Products</Link>
+            <Link href="/account" className="hover:text-gray-900 transition-colors">My Account</Link>
+            <Link href="/account/cart" className="hover:text-gray-900 transition-colors">Cart</Link>
             <Link href="/admin/login" className="hover:text-gray-900 transition-colors">Admin</Link>
           </nav>
         </div>
