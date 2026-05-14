@@ -83,13 +83,7 @@ export default async function ProductsPage() {
                     display: 'block',
                     textDecoration: 'none',
                   }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = '#3A3A3A';
-                    (e.currentTarget as HTMLElement).style.boxShadow = '0 0 0 1px #3A3A3A';
                   }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.borderColor = '#2A2A2A';
-                    (e.currentTarget as HTMLElement).style.boxShadow = 'none';
                   }}
                 >
                   {/* Image area */}

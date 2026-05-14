@@ -90,11 +90,7 @@ export default async function AccountDashboard() {
               textDecoration: 'none',
               transition: 'border-color 0.15s',
             }}
-            onMouseOver={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = '#3A3A3A';
             }}
-            onMouseOut={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = '#2A2A2A';
             }}
           >
             {/* Icon */}
@@ -189,11 +185,7 @@ export default async function AccountDashboard() {
               textDecoration: 'none',
               transition: 'border-color 0.15s',
             }}
-            onMouseOver={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = '#3A3A3A';
             }}
-            onMouseOut={(e) => {
-              (e.currentTarget as HTMLElement).style.borderColor = '#2A2A2A';
             }}
           >
             {/* Icon */}
