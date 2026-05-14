@@ -2,16 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ── Design tokens ── */
 :root {
-  --color-primary: #01696f;
-  --color-primary-hover: #0c4e54;
+  --bg:           #0A0A0A;
+  --surface:      #131313;
+  --surface-hi:   #1A1A1A;
+  --border:       #2A2A2A;
+  --border-hi:    #3A3A3A;
+  --text:         #F5F5F5;
+  --text-muted:   #888888;
+  --text-faint:   #444444;
+  --lime:         #E8FF47;
+  --lime-dark:    #C8DF1F;
+  --coral:        #FF4747;
+  --sidebar-bg:   #0D0D0D;
+  --sidebar-border: #222222;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html { background: #0A0A0A; }
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background: #f7f6f2;
-  color: #28251d;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #0A0A0A;
+  color: #F5F5F5;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0A0A0A; }
+::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #3A3A3A; }
+
+/* Utility: font families */
+.font-syne { font-family: 'Syne', sans-serif; }
+.font-mono-brand { font-family: 'JetBrains Mono', monospace; }

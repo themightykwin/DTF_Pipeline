@@ -27,9 +27,22 @@ export default function DesignCard({
   catalogProductId,
 }: DesignCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden hover:shadow-sm transition-shadow">
+    <div
+      className="overflow-hidden transition-colors"
+      style={{
+        background: '#131313',
+        border: '1px solid #2A2A2A',
+        borderRadius: '12px',
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = '#3A3A3A';
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.borderColor = '#2A2A2A';
+      }}
+    >
       {/* Preview — garment + artwork overlay via GarmentPreview */}
-      <div className="aspect-square bg-gray-50 p-4">
+      <div className="aspect-square p-4" style={{ background: '#1A1A1A' }}>
         <GarmentPreview
           imageSrc={garmentImageSrc}
           imageAlt={label}
@@ -42,10 +55,34 @@ export default function DesignCard({
       </div>
 
       <div className="p-4">
-        <p className="font-semibold text-gray-900 text-sm truncate">{label}</p>
-        <p className="text-xs text-gray-400 mt-0.5 capitalize">{garmentType}</p>
+        <p
+          className="truncate text-sm"
+          style={{
+            fontFamily: "'Inter', sans-serif",
+            fontWeight: 600,
+            color: '#F5F5F5',
+          }}
+        >
+          {label}
+        </p>
+        <p
+          className="mt-0.5 capitalize"
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '10px',
+            color: '#888888',
+          }}
+        >
+          {garmentType}
+        </p>
         {totalUnits > 0 && (
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p
+            className="mt-0.5"
+            style={{
+              fontSize: '10px',
+              color: '#888888',
+            }}
+          >
             {totalUnits} unit{totalUnits !== 1 ? 's' : ''}
             {selectedColors.length > 0 ? ` · ${selectedColors.join(', ')}` : ''}
           </p>
@@ -53,7 +90,20 @@ export default function DesignCard({
         <div className="mt-3">
           <Link
             href={`/products/${catalogProductId ?? ''}?configId=${designId}`}
-            className="block w-full text-center py-2 text-xs font-semibold bg-[#01696f] text-white rounded-lg hover:bg-[#0c4e54] transition-colors"
+            className="block w-full text-center py-2 text-xs transition-colors"
+            style={{
+              background: '#E8FF47',
+              color: '#0A0A0A',
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 700,
+              borderRadius: '8px',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLAnchorElement).style.background = '#C8DF1F';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLAnchorElement).style.background = '#E8FF47';
+            }}
           >
             Reorder
           </Link>

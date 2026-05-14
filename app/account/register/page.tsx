@@ -32,69 +32,251 @@ export default function CustomerRegisterPage() {
     }
   }
 
+  // ── Input style helper ────────────────────────────────────────────────────
+  const inputStyle: React.CSSProperties = {
+    background: '#1A1A1A',
+    border: '1px solid #2A2A2A',
+    borderRadius: '6px',
+    color: '#F5F5F5',
+    fontSize: '14px',
+    fontFamily: 'Inter, sans-serif',
+    padding: '12px 16px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  };
+
+  function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
+    e.currentTarget.style.borderColor = '#E8FF47';
+    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(232,255,71,0.15)';
+  }
+
+  function handleBlur(e: React.FocusEvent<HTMLInputElement>) {
+    e.currentTarget.style.borderColor = '#2A2A2A';
+    e.currentTarget.style.boxShadow = 'none';
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontFamily: 'Inter, sans-serif',
+    fontWeight: 500,
+    fontSize: '14px',
+    color: '#888888',
+  };
+
   return (
-    <main className="min-h-screen bg-[#f7f6f2] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight">DTF Pipeline</Link>
-          <p className="text-sm text-gray-500 mt-2">Create your account</p>
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#0A0A0A',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 16px',
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column' }}>
+
+        {/* ── Header ── */}
+        <div style={{ marginBottom: '32px', textAlign: 'center' }}>
+          <Link
+            href="/"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              textDecoration: 'none',
+              marginBottom: '8px',
+            }}
+          >
+            <span style={{ color: '#E8FF47', fontSize: '10px', lineHeight: 1 }}>●</span>
+            <span
+              style={{
+                fontFamily: "'Syne', sans-serif",
+                fontWeight: 700,
+                fontSize: '20px',
+                color: '#F5F5F5',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              DTF Pipeline
+            </span>
+          </Link>
+          <p
+            style={{
+              fontSize: '14px',
+              fontFamily: 'Inter, sans-serif',
+              color: '#888888',
+              marginTop: '4px',
+            }}
+          >
+            Create your account
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
+        {/* ── Card ── */}
+        <div
+          style={{
+            background: '#131313',
+            border: '1px solid #2A2A2A',
+            borderRadius: '12px',
+            padding: '40px',
+            width: '100%',
+          }}
+        >
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+            {/* Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={labelStyle}>Name</label>
               <input
-                type="text" value={name} onChange={e => setName(e.target.value)}
-                autoComplete="name" placeholder="Your name"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-              <input
-                type="email" value={email} onChange={e => setEmail(e.target.value)}
-                required autoComplete="email" placeholder="you@example.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
-              <input
-                type="password" value={password} onChange={e => setPassword(e.target.value)}
-                required autoComplete="new-password" placeholder="At least 8 characters"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
-              <input
-                type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                required autoComplete="new-password" placeholder="Repeat password"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                placeholder="Your name"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
               />
             </div>
 
+            {/* Email */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={labelStyle}>Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder="you@example.com"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            {/* Password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={labelStyle}>Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+                placeholder="At least 8 characters"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            {/* Confirm Password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={labelStyle}>Confirm Password</label>
+              <input
+                type="password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                required
+                autoComplete="new-password"
+                placeholder="Repeat password"
+                style={inputStyle}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+              />
+            </div>
+
+            {/* Error */}
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+              <div
+                style={{
+                  background: 'rgba(255,71,71,0.1)',
+                  border: '1px solid rgba(255,71,71,0.3)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: '#FF4747',
+                  fontSize: '14px',
+                  fontFamily: 'Inter, sans-serif',
+                }}
+              >
+                {error}
+              </div>
             )}
 
+            {/* Submit */}
             <button
-              type="submit" disabled={loading}
-              className="w-full py-3 bg-[#01696f] text-white font-semibold text-sm rounded-xl hover:bg-[#0c4e54] transition-colors disabled:opacity-50 mt-2"
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: '#E8FF47',
+                color: '#0A0A0A',
+                fontFamily: 'Inter, sans-serif',
+                fontWeight: 700,
+                fontSize: '14px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.5 : 1,
+                boxShadow: '0 0 20px rgba(232,255,71,0.25)',
+                transition: 'background 0.15s, opacity 0.15s',
+                marginTop: '4px',
+              }}
+              onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#C8DF1F'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E8FF47'; }}
             >
               {loading ? 'Creating account…' : 'Create Account'}
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
+          {/* Login link */}
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: '14px',
+              fontFamily: 'Inter, sans-serif',
+              color: '#888888',
+              marginTop: '24px',
+            }}
+          >
             Already have an account?{' '}
-            <Link href="/account/login" className="text-[#01696f] font-medium hover:underline">
+            <Link
+              href="/account/login"
+              style={{
+                color: '#E8FF47',
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
               Sign in
             </Link>
           </p>
         </div>
+
+        {/* Back to home */}
+        <p
+          style={{
+            textAlign: 'center',
+            marginTop: '20px',
+            fontSize: '12px',
+            fontFamily: 'Inter, sans-serif',
+          }}
+        >
+          <Link
+            href="/"
+            style={{
+              color: '#444444',
+              textDecoration: 'none',
+              transition: 'color 0.15s',
+            }}
+          >
+            ← Back to home
+          </Link>
+        </p>
       </div>
     </main>
   );

@@ -2,7 +2,7 @@ import { getCustomerSession } from '@/lib/customer-auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import AccountHeader from '@/components/account/AccountHeader';
+import SidebarLayout from '@/components/account/SidebarLayout';
 import CartCheckoutButton from '@/components/account/CartCheckoutButton';
 
 export const dynamic = 'force-dynamic';
@@ -61,13 +61,29 @@ export default async function CartPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader email={user?.email ?? session.user.email} />
-
-      <main className="max-w-4xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Your Cart</h1>
-          <p className="text-sm text-gray-500 mt-1">
+    <SidebarLayout userName={session.user.name ?? undefined} userEmail={user?.email ?? session.user.email}>
+      <main style={{ padding: '40px', maxWidth: '960px' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1
+            style={{
+              fontFamily: "'Syne', sans-serif",
+              fontWeight: 700,
+              fontSize: '28px',
+              color: '#F5F5F5',
+              letterSpacing: '-0.02em',
+              marginBottom: '6px',
+            }}
+          >
+            Your Cart
+          </h1>
+          <p
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '12px',
+              color: '#888888',
+            }}
+          >
             {enriched.length === 0
               ? 'No items yet'
               : `${enriched.length} item${enriched.length !== 1 ? 's' : ''}`}
@@ -75,17 +91,38 @@ export default async function CartPage() {
         </div>
 
         {enriched.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 py-24 text-center">
-            <p className="text-gray-400 text-sm mb-4">Your cart is empty.</p>
+          <div
+            style={{
+              background: '#131313',
+              border: '1px solid #2A2A2A',
+              borderRadius: '12px',
+              paddingTop: '96px',
+              paddingBottom: '96px',
+              textAlign: 'center',
+            }}
+          >
+            <p style={{ color: '#888888', fontSize: '14px', marginBottom: '16px' }}>
+              Your cart is empty.
+            </p>
             <Link
               href="/products"
-              className="inline-block px-5 py-2.5 bg-[#01696f] text-white text-sm font-semibold rounded-xl hover:bg-[#0c4e54] transition-colors"
+              style={{
+                display: 'inline-block',
+                padding: '10px 20px',
+                background: '#E8FF47',
+                color: '#0A0A0A',
+                fontSize: '14px',
+                fontWeight: 700,
+                borderRadius: '8px',
+                textDecoration: 'none',
+                boxShadow: '0 0 20px rgba(232,255,71,0.25)',
+              }}
             >
               Browse Products
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Cart items */}
             {enriched.map((item) => {
               const product = item.configuration.catalogProduct;
@@ -96,18 +133,45 @@ export default async function CartPage() {
               return (
                 <div
                   key={item.id}
-                  className="bg-white rounded-2xl border border-gray-200 p-5 flex gap-5"
+                  style={{
+                    background: '#131313',
+                    border: '1px solid #2A2A2A',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    display: 'flex',
+                    gap: '20px',
+                  }}
                 >
                   {/* Thumbnail */}
-                  <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-gray-50 border border-gray-100 relative">
+                  <div
+                    style={{
+                      flexShrink: 0,
+                      width: '80px',
+                      height: '80px',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      background: '#1A1A1A',
+                      border: '1px solid #2A2A2A',
+                      position: 'relative',
+                    }}
+                  >
                     {image ? (
                       <img
                         src={image.storageUrl}
                         alt={image.altText ?? product.title}
-                        className="w-full h-full object-contain"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-200">
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#444444',
+                        }}
+                      >
                         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -119,38 +183,78 @@ export default async function CartPage() {
                       <img
                         src={artUrl}
                         alt="Design"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                        style={{ padding: '20%' }}
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          pointerEvents: 'none',
+                          padding: '20%',
+                        }}
                       />
                     )}
                   </div>
 
                   {/* Details */}
-                  <div className="flex-1 min-w-0">
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <Link
                       href={`/products/${product.id}`}
-                      className="font-semibold text-gray-900 hover:text-[#01696f] transition-colors text-sm leading-snug"
+                      style={{
+                        fontWeight: 600,
+                        color: '#F5F5F5',
+                        fontSize: '14px',
+                        lineHeight: '1.4',
+                        textDecoration: 'none',
+                        display: 'block',
+                        marginBottom: '2px',
+                      }}
+                      className="hover:text-[#E8FF47] transition-colors"
                     >
                       {product.title}
                     </Link>
-                    <p className="text-xs text-gray-400 mt-0.5 capitalize">{product.productType}</p>
+                    <p
+                      style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: '10px',
+                        color: '#888888',
+                        textTransform: 'capitalize',
+                        marginBottom: '6px',
+                      }}
+                    >
+                      {product.productType}
+                    </p>
 
                     {/* Colors */}
                     {item.selectedColors.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1.5">
+                      <p style={{ fontSize: '12px', color: '#888888', marginBottom: '8px' }}>
                         Colors: {item.selectedColors.join(', ')}
                       </p>
                     )}
 
                     {/* Quantities breakdown */}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
                       {Object.entries(item.quantities).map(([color, sizes]) =>
                         Object.entries(sizes as Record<string, number>)
                           .filter(([, qty]) => qty > 0)
                           .map(([size, qty]) => (
                             <span
                               key={`${color}-${size}`}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 rounded-full text-[10px] text-gray-600 font-medium"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                paddingLeft: '8px',
+                                paddingRight: '8px',
+                                paddingTop: '2px',
+                                paddingBottom: '2px',
+                                background: '#1A1A1A',
+                                border: '1px solid #2A2A2A',
+                                borderRadius: '9999px',
+                                fontSize: '10px',
+                                color: '#888888',
+                                fontWeight: 500,
+                              }}
                             >
                               {color} / {size} × {qty}
                             </span>
@@ -159,16 +263,35 @@ export default async function CartPage() {
                     </div>
 
                     {item.notes && (
-                      <p className="text-xs text-gray-400 mt-2 italic">Note: {item.notes}</p>
+                      <p style={{ fontSize: '12px', color: '#888888', marginTop: '8px', fontStyle: 'italic' }}>
+                        Note: {item.notes}
+                      </p>
                     )}
                   </div>
 
                   {/* Price + remove */}
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <span className="font-semibold text-gray-900 text-sm">
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: '8px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "'Syne', sans-serif",
+                        fontWeight: 600,
+                        fontSize: '14px',
+                        color: '#F5F5F5',
+                      }}
+                    >
                       ${(item.priceCents / 100).toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-gray-400">{item.totalUnits} unit{item.totalUnits !== 1 ? 's' : ''}</span>
+                    <span style={{ fontSize: '10px', color: '#888888' }}>
+                      {item.totalUnits} unit{item.totalUnits !== 1 ? 's' : ''}
+                    </span>
                     <CartCheckoutButton
                       cartItemId={item.id}
                       configurationId={item.configuration.id}
@@ -180,14 +303,38 @@ export default async function CartPage() {
             })}
 
             {/* Order summary + checkout */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 mt-2">
-              <div className="flex items-center justify-between mb-5">
-                <span className="text-sm font-semibold text-gray-900">Estimated Total</span>
-                <span className="text-lg font-bold text-[#01696f]">
+            <div
+              style={{
+                background: '#131313',
+                border: '1px solid #2A2A2A',
+                borderRadius: '12px',
+                padding: '24px',
+                marginTop: '8px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '20px',
+                }}
+              >
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#F5F5F5' }}>
+                  Estimated Total
+                </span>
+                <span
+                  style={{
+                    fontFamily: "'Syne', sans-serif",
+                    fontWeight: 700,
+                    fontSize: '18px',
+                    color: '#E8FF47',
+                  }}
+                >
                   ${(grandTotalCents / 100).toFixed(2)}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 mb-5">
+              <p style={{ fontSize: '12px', color: '#888888', marginBottom: '20px' }}>
                 Final pricing is confirmed at checkout. Shipping and applicable taxes may be added by Shopify.
               </p>
 
@@ -204,6 +351,6 @@ export default async function CartPage() {
           </div>
         )}
       </main>
-    </div>
+    </SidebarLayout>
   );
 }

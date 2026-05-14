@@ -2,7 +2,7 @@ import { getCustomerSession } from '@/lib/customer-auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import AccountHeader from '@/components/account/AccountHeader';
+import SidebarLayout from '@/components/account/SidebarLayout';
 import DesignCard from '@/components/account/DesignCard';
 
 export const dynamic = 'force-dynamic';
@@ -32,28 +32,93 @@ export default async function MyDesignsPage() {
   });
 
   return (
-    <main className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader email={session.user.email} />
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        <div className="flex items-center justify-between mb-8">
+    <SidebarLayout userName={session.user.name ?? undefined} userEmail={session.user.email}>
+      <div style={{ padding: '40px' }}>
+
+        {/* Header row */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 32,
+          }}
+        >
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Designs</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1
+              style={{
+                fontFamily: "'Syne', sans-serif",
+                fontWeight: 700,
+                fontSize: 28,
+                color: '#F5F5F5',
+                margin: 0,
+              }}
+            >
+              My Designs
+            </h1>
+            <p
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 12,
+                color: '#888888',
+                marginTop: 4,
+                marginBottom: 0,
+              }}
+            >
               {designs.length} saved design{designs.length !== 1 ? 's' : ''}
             </p>
           </div>
+
           <Link
             href="/products"
-            className="px-4 py-2 bg-[#01696f] text-white text-sm font-medium rounded-lg hover:bg-[#0c4e54] transition-colors"
+            style={{
+              background: '#E8FF47',
+              color: '#0A0A0A',
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 600,
+              fontSize: 14,
+              padding: '8px 16px',
+              borderRadius: 8,
+              textDecoration: 'none',
+              display: 'inline-block',
+              transition: 'opacity 0.15s',
+            }}
           >
             + New Design
           </Link>
         </div>
 
+        {/* Empty state */}
         {designs.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-2xl border border-gray-200">
-            <p className="text-gray-400 text-sm mb-3">No saved designs yet.</p>
-            <Link href="/products" className="text-[#01696f] text-sm font-medium hover:underline">
+          <div
+            style={{
+              background: '#131313',
+              border: '1px solid #2A2A2A',
+              borderRadius: 12,
+              padding: '96px 24px',
+              textAlign: 'center',
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 14,
+                color: '#888888',
+                marginBottom: 12,
+              }}
+            >
+              No saved designs yet.
+            </p>
+            <Link
+              href="/products"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+                fontSize: 14,
+                color: '#E8FF47',
+                textDecoration: 'none',
+              }}
+            >
               Browse products →
             </Link>
           </div>
@@ -109,7 +174,8 @@ export default async function MyDesignsPage() {
             })}
           </div>
         )}
+
       </div>
-    </main>
+    </SidebarLayout>
   );
 }

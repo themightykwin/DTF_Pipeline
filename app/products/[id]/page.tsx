@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
 import ProductCustomizer from '@/components/ProductCustomizer';
-import Link from 'next/link';
+import SidebarLayout from '@/components/account/SidebarLayout';
+import { getCustomerSession } from '@/lib/customer-auth';
 
 interface Props {
   params: { id: string };
@@ -16,6 +17,8 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function ProductPage({ params, searchParams }: Props) {
+  const session = await getCustomerSession();
+
   const product = await prisma.catalogProduct.findUnique({
     where: { id: params.id, status: 'active' },
     include: { images: { orderBy: { sortOrder: 'asc' } } },
@@ -60,34 +63,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f6f2]">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-          <Link href="/" className="text-lg font-bold text-gray-900 tracking-tight">DTF Pipeline</Link>
-          <nav className="flex gap-6 text-sm text-gray-500">
-            <Link href="/products" className="hover:text-gray-900 transition-colors">← All Products</Link>
-            <Link href="/account" className="hover:text-gray-900 transition-colors">My Account</Link>
-            <Link href="/account/cart" className="hover:text-gray-900 transition-colors">Cart</Link>
-            <Link href="/admin/login" className="hover:text-gray-900 transition-colors">Admin</Link>
-          </nav>
-        </div>
-      </div>
-
-      {/* Breadcrumb */}
-      <div className="max-w-6xl mx-auto px-6 py-3">
-        <nav className="text-xs text-gray-400 flex items-center gap-1.5">
-          <Link href="/" className="hover:text-gray-600">Home</Link>
-          <span>/</span>
-          <Link href="/products" className="hover:text-gray-600">Products</Link>
-          <span>/</span>
-          <span className="text-gray-700">{product.title}</span>
-          {savedConfig && <><span>/</span><span className="text-[#01696f]">Reordering saved design</span></>}
-        </nav>
-      </div>
-
+    <SidebarLayout
+      userName={session?.user.name ?? undefined}
+      userEmail={session?.user.email ?? undefined}
+    >
       <ProductCustomizer product={parsed} savedConfig={savedConfig} />
-    </main>
+    </SidebarLayout>
   );
 }
 

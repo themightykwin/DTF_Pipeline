@@ -2,8 +2,7 @@ import { getCustomerSession } from '@/lib/customer-auth';
 import { prisma } from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import AccountHeader from '@/components/account/AccountHeader';
-import LogoutButton from '@/components/account/LogoutButton';
+import SidebarLayout from '@/components/account/SidebarLayout';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Account — DTF Pipeline' };
@@ -20,99 +19,377 @@ export default async function AccountDashboard() {
 
   const firstName = session.user.name?.split(' ')[0] ?? null;
 
-  return (
-    <main className="min-h-screen bg-[#f7f6f2]">
-      <AccountHeader email={session.user.email} />
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
-      <div className="max-w-2xl mx-auto px-6 py-12">
-        {/* Welcome */}
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
+  return (
+    <SidebarLayout userName={session.user.name ?? undefined} userEmail={session.user.email}>
+      <div style={{ padding: '40px', maxWidth: '900px' }}>
+
+        {/* Page header */}
+        <div>
+          <h1
+            style={{
+              fontFamily: "'Syne', sans-serif",
+              fontWeight: 700,
+              fontSize: 28,
+              color: '#F5F5F5',
+              margin: 0,
+            }}
+          >
+            Dashboard
           </h1>
-          <p className="text-sm text-gray-400 mt-2">{session.user.email}</p>
+          <p
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 12,
+              color: '#888888',
+              marginTop: 4,
+              marginBottom: 0,
+            }}
+          >
+            {today}
+          </p>
+          <p
+            style={{
+              fontFamily: "'Inter', sans-serif",
+              fontWeight: 400,
+              fontSize: 14,
+              color: '#888888',
+              marginTop: 4,
+            }}
+          >
+            Welcome back, {firstName || 'there'}.
+          </p>
         </div>
 
-        {/* Primary action cards — matches XD flow */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-10">
-          {/* Re-order Saved Design */}
+        {/* Primary action cards */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 20,
+            marginTop: 32,
+          }}
+        >
+          {/* Card 1 — Re-order Saved Design */}
           <Link
             href="/account/designs"
-            className="group relative bg-white rounded-2xl border border-gray-200 p-7 hover:border-[#01696f]/40 hover:shadow-md transition-all flex flex-col gap-4"
+            style={{
+              background: '#131313',
+              border: '1px solid #2A2A2A',
+              borderLeft: '3px solid #E8FF47',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              textDecoration: 'none',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseOver={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = '#3A3A3A';
+            }}
+            onMouseOut={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = '#2A2A2A';
+            }}
           >
+            {/* Icon */}
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: 'rgba(232,255,71,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#E8FF47"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M1 4v6h6" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3" />
+              </svg>
+            </div>
+
+            {/* Title */}
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: 15,
+                color: '#F5F5F5',
+                margin: 0,
+              }}
+            >
+              Re-order a Saved Design
+            </p>
+
+            {/* Desc */}
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 13,
+                color: '#888888',
+                margin: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              Pick up where you left off — edit quantities or colors.
+            </p>
+
+            {/* savedCount badge */}
             {savedCount > 0 && (
-              <span className="absolute top-4 right-4 bg-[#01696f] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                {savedCount}
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full self-start"
+                style={{ background: '#E8FF47', color: '#0A0A0A' }}
+              >
+                {savedCount} saved
               </span>
             )}
-            <div className="w-11 h-11 rounded-xl bg-[#01696f]/10 flex items-center justify-center">
-              <svg className="w-5 h-5 text-[#01696f]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900 text-base">Re-order Saved Design</p>
-              <p className="text-sm text-gray-400 mt-1 leading-snug">
-                Pick up where you left off — edit, update quantities, or re-add to cart.
-              </p>
-            </div>
-            <span className="text-xs font-medium text-[#01696f] group-hover:underline mt-auto">
-              View saved designs →
+
+            {/* Footer */}
+            <span
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+                fontSize: 13,
+                color: '#E8FF47',
+                marginTop: 'auto',
+              }}
+            >
+              Browse Designs →
             </span>
           </Link>
 
-          {/* Create New Design */}
+          {/* Card 2 — Create New Design */}
           <Link
             href="/products"
-            className="group relative bg-[#01696f] rounded-2xl p-7 hover:bg-[#0c4e54] transition-colors flex flex-col gap-4"
+            style={{
+              background: '#131313',
+              border: '1px solid #2A2A2A',
+              borderLeft: '3px solid #FF4747',
+              borderRadius: 12,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              textDecoration: 'none',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseOver={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = '#3A3A3A';
+            }}
+            onMouseOut={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = '#2A2A2A';
+            }}
           >
-            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            {/* Icon */}
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: 'rgba(255,71,71,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#FF4747"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 4v16m8-8H4" />
               </svg>
             </div>
-            <div>
-              <p className="font-semibold text-white text-base">Create New Design</p>
-              <p className="text-sm text-white/70 mt-1 leading-snug">
-                Browse the catalog, upload your artwork, and customize your garment.
-              </p>
-            </div>
-            <span className="text-xs font-medium text-white/90 group-hover:text-white mt-auto">
-              Browse products →
+
+            {/* Title */}
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                fontSize: 15,
+                color: '#F5F5F5',
+                margin: 0,
+              }}
+            >
+              Create New Design
+            </p>
+
+            {/* Desc */}
+            <p
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 13,
+                color: '#888888',
+                margin: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              Upload artwork, pick a garment, configure your order.
+            </p>
+
+            {/* Footer */}
+            <span
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+                fontSize: 13,
+                color: '#FF4747',
+                marginTop: 'auto',
+              }}
+            >
+              Start Designing →
             </span>
           </Link>
         </div>
 
-        {/* Secondary stats row */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Stats row */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 16,
+            marginTop: 20,
+          }}
+        >
+          {/* Saved Designs */}
+          <div
+            style={{
+              background: '#131313',
+              border: '1px solid #2A2A2A',
+              borderRadius: 12,
+              padding: 20,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "'Syne', sans-serif",
+                fontWeight: 700,
+                fontSize: 36,
+                color: '#F5F5F5',
+                margin: 0,
+              }}
+            >
+              {savedCount}
+            </p>
+            <p
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10,
+                color: '#888888',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                marginTop: 4,
+              }}
+            >
+              SAVED DESIGNS
+            </p>
+          </div>
+
+          {/* In Cart */}
           <Link
             href="/account/cart"
-            className="bg-white rounded-xl border border-gray-200 p-4 hover:border-[#01696f]/30 transition-colors text-center group"
+            style={{ textDecoration: 'none' }}
           >
-            <p className="text-2xl font-bold text-gray-900">{cartCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Cart</p>
-            {cartCount > 0 && (
-              <p className="text-[10px] text-[#01696f] font-medium mt-1 group-hover:underline">Checkout →</p>
-            )}
+            <div
+              style={{
+                background: '#131313',
+                border: '1px solid #2A2A2A',
+                borderRadius: 12,
+                padding: 20,
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 36,
+                  color: '#F5F5F5',
+                  margin: 0,
+                }}
+              >
+                {cartCount}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10,
+                  color: '#888888',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginTop: 4,
+                }}
+              >
+                IN CART
+              </p>
+            </div>
           </Link>
+
+          {/* Orders */}
           <Link
             href="/account/orders"
-            className="bg-white rounded-xl border border-gray-200 p-4 hover:border-[#01696f]/30 transition-colors text-center group"
+            style={{ textDecoration: 'none' }}
           >
-            <p className="text-2xl font-bold text-gray-900">{orderCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">Orders</p>
-            {orderCount > 0 && (
-              <p className="text-[10px] text-[#01696f] font-medium mt-1 group-hover:underline">View all →</p>
-            )}
+            <div
+              style={{
+                background: '#131313',
+                border: '1px solid #2A2A2A',
+                borderRadius: 12,
+                padding: 20,
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+            >
+              <p
+                style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontWeight: 700,
+                  fontSize: 36,
+                  color: '#F5F5F5',
+                  margin: 0,
+                }}
+              >
+                {orderCount}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10,
+                  color: '#888888',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginTop: 4,
+                }}
+              >
+                ORDERS
+              </p>
+            </div>
           </Link>
-          <div className="bg-white rounded-xl border border-gray-200 p-4 hover:border-red-100 transition-colors text-center">
-            <LogoutButton
-              label="Sign out"
-              className="w-full h-full flex flex-col items-center justify-center gap-0.5 text-gray-400 hover:text-red-500 transition-colors"
-            />
-          </div>
         </div>
+
       </div>
-    </main>
+    </SidebarLayout>
   );
 }

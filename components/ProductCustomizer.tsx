@@ -258,14 +258,17 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
   return (
     <>
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div style={{ padding: '40px', maxWidth: '1100px' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
           {/* ── LEFT: Image preview + thumbnails ── */}
           <div className="flex flex-col gap-3">
 
             {/* Main preview */}
-            <div className="relative rounded-2xl overflow-hidden bg-white border border-gray-200 aspect-square">
+            <div
+              className="relative aspect-square overflow-hidden"
+              style={{ background: '#131313', border: '1px solid #2A2A2A', borderRadius: '12px' }}
+            >
               {activeImage ? (
                 hasAnyDesign ? (
                   /* Garment preview with design overlay */
@@ -287,27 +290,49 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                   />
                 )
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-300 text-sm">
+                <div className="w-full h-full flex items-center justify-center text-sm" style={{ color: '#444444' }}>
                   No image
                 </div>
               )}
 
               {/* Front/Back toggle — only visible when design is active */}
               {hasAnyDesign && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full p-1">
+                <div
+                  className="absolute top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1 p-1"
+                  style={{
+                    background: '#0D0D0D',
+                    border: '1px solid #2A2A2A',
+                    borderRadius: '9999px',
+                  }}
+                >
                   {(['front', 'back'] as const).map((side) => (
                     <button
                       key={side}
                       onClick={() => setPreviewSide(side)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs transition-all capitalize"
+                      style={
                         previewSide === side
-                          ? 'bg-white text-gray-900'
-                          : 'text-white/70 hover:text-white'
-                      }`}
+                          ? {
+                              background: '#E8FF47',
+                              color: '#0A0A0A',
+                              fontFamily: "'Inter', sans-serif",
+                              fontWeight: 600,
+                              borderRadius: '9999px',
+                            }
+                          : {
+                              color: '#888888',
+                              fontFamily: "'Inter', sans-serif",
+                              fontWeight: 500,
+                              borderRadius: '9999px',
+                            }
+                      }
                     >
-                      <span className="capitalize">{side}</span>
+                      <span>{side}</span>
                       {design[side] && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#01696f]" />
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ background: '#E8FF47' }}
+                        />
                       )}
                     </button>
                   ))}
@@ -318,12 +343,28 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
               {hasAnyDesign && (
                 <div className="absolute top-3 left-3 flex flex-col gap-1">
                   {design.front && (
-                    <span className="px-2 py-0.5 bg-[#01696f] text-white text-[10px] font-semibold rounded-full">
+                    <span
+                      className="px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        background: 'rgba(232,255,71,0.15)',
+                        color: '#E8FF47',
+                        border: '1px solid rgba(232,255,71,0.3)',
+                        borderRadius: '9999px',
+                      }}
+                    >
                       Front ✓
                     </span>
                   )}
                   {design.back && (
-                    <span className="px-2 py-0.5 bg-[#01696f] text-white text-[10px] font-semibold rounded-full">
+                    <span
+                      className="px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        background: 'rgba(232,255,71,0.15)',
+                        color: '#E8FF47',
+                        border: '1px solid rgba(232,255,71,0.3)',
+                        borderRadius: '9999px',
+                      }}
+                    >
                       Back ✓
                     </span>
                   )}
@@ -334,7 +375,17 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                 <button
                   onClick={() => setDesignerOpen(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#01696f] text-white text-sm font-semibold rounded-full shadow-lg hover:bg-[#0c4e54] transition-all hover:shadow-xl active:scale-95"
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm active:scale-95 transition-all"
+                  style={{
+                    background: '#E8FF47',
+                    color: '#0A0A0A',
+                    fontFamily: "'Inter', sans-serif",
+                    fontWeight: 700,
+                    borderRadius: '9999px',
+                    boxShadow: '0 0 20px rgba(232,255,71,0.25)',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#C8DF1F'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#E8FF47'; }}
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -350,16 +401,25 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                 {images.map((img, i) => {
                   // Use front design for thumbnail overlay; fall back to back
                   const thumbDesign = design.front ?? design.back ?? null;
+                  const isActive = i === activeImageIdx;
                   return (
                     <button
                       key={img.id}
                       onClick={() => handleThumbnailClick(i)}
                       title={img.altText ?? undefined}
-                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                        i === activeImageIdx
-                          ? 'border-[#01696f]'
-                          : 'border-gray-200 hover:border-gray-400'
-                      }`}
+                      className="flex-shrink-0 w-16 h-16 overflow-hidden transition-all"
+                      style={{
+                        background: '#0D0D0D',
+                        border: `2px solid ${isActive ? '#E8FF47' : '#2A2A2A'}`,
+                        borderRadius: '8px',
+                        boxShadow: isActive ? '0 0 8px rgba(232,255,71,0.3)' : 'none',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = '#3A3A3A';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) (e.currentTarget as HTMLButtonElement).style.borderColor = '#2A2A2A';
+                      }}
                     >
                       {hasAnyDesign && thumbDesign ? (
                         <GarmentPreview
@@ -372,7 +432,7 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                           className="w-full h-full"
                         />
                       ) : (
-                        <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-contain bg-white" />
+                        <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-contain" style={{ background: '#0D0D0D' }} />
                       )}
                     </button>
                   );
@@ -386,8 +446,18 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
             {/* Reorder banner */}
             {savedConfig && (
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-[#01696f]/8 border border-[#01696f]/20 rounded-xl text-xs text-[#01696f] font-medium">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 text-xs font-medium"
+                style={{
+                  background: 'rgba(232,255,71,0.05)',
+                  border: '1px solid rgba(232,255,71,0.15)',
+                  borderRadius: '8px',
+                  color: '#E8FF47',
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 500,
+                }}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="#E8FF47" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 Saved design loaded — update quantities or colors and add to cart.
@@ -396,18 +466,52 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
             {/* Product info */}
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-widest mb-1 capitalize">
+              <p
+                className="mb-1 uppercase tracking-widest"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '10px',
+                  color: '#888888',
+                }}
+              >
                 {product.productType}
               </p>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">{product.title}</h1>
+              <h1
+                className="mb-1"
+                style={{
+                  fontFamily: "'Syne', sans-serif",
+                  fontWeight: 700,
+                  fontSize: '24px',
+                  color: '#F5F5F5',
+                }}
+              >
+                {product.title}
+              </h1>
               {product.basePriceCents > 0 && (
-                <p className="text-lg font-semibold text-[#01696f]">
+                <p
+                  className="text-lg"
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    fontWeight: 600,
+                    color: '#E8FF47',
+                  }}
+                >
                   From ${(product.basePriceCents / 100).toFixed(2)}
-                  <span className="text-sm font-normal text-gray-400 ml-1">/ unit</span>
+                  <span
+                    className="ml-1 text-sm"
+                    style={{ fontWeight: 400, color: '#888888' }}
+                  >
+                    / unit
+                  </span>
                 </p>
               )}
               {product.description && (
-                <p className="text-sm text-gray-500 mt-3 leading-relaxed">{product.description}</p>
+                <p
+                  className="text-sm mt-3 leading-relaxed"
+                  style={{ color: '#888888' }}
+                >
+                  {product.description}
+                </p>
               )}
             </div>
 
@@ -415,12 +519,21 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
             {availableColors.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <h2 className="text-sm font-semibold text-gray-900">Colors</h2>
+                  <h2
+                    className="text-sm"
+                    style={{
+                      fontFamily: "'Inter', sans-serif",
+                      fontWeight: 600,
+                      color: '#F5F5F5',
+                    }}
+                  >
+                    Colors
+                  </h2>
                   {activeColor && (
-                    <span className="text-xs text-gray-500">{activeColor}</span>
+                    <span className="text-xs" style={{ color: '#888888' }}>{activeColor}</span>
                   )}
                   {selectedColors.length > 1 && (
-                    <span className="text-xs text-gray-400">({selectedColors.length} selected)</span>
+                    <span className="text-xs" style={{ color: '#888888' }}>({selectedColors.length} selected)</span>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2.5">
@@ -432,20 +545,33 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                         key={color.label}
                         onClick={() => handleColorClick(color)}
                         title={color.label}
-                        className={`group relative w-9 h-9 rounded-full border-2 transition-all ${
-                          isActive
-                            ? 'border-[#01696f] scale-110 shadow-md ring-2 ring-[#01696f]/20'
+                        className="group relative w-9 h-9 rounded-full border-2 transition-all"
+                        style={{
+                          backgroundColor: color.hex,
+                          borderColor: isActive
+                            ? '#E8FF47'
                             : isSelected
-                            ? 'border-[#01696f]/60 scale-105 shadow-sm'
-                            : 'border-gray-300 hover:border-gray-500 hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: color.hex }}
+                            ? 'rgba(232,255,71,0.4)'
+                            : '#2A2A2A',
+                          boxShadow: isActive
+                            ? '0 0 0 2px #E8FF47, 0 0 8px rgba(232,255,71,0.4)'
+                            : 'none',
+                          transform: isActive ? 'scale(1.10)' : isSelected ? 'scale(1.05)' : 'scale(1)',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isActive && !isSelected)
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = '#3A3A3A';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive && !isSelected)
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = '#2A2A2A';
+                        }}
                       >
                         {isSelected && (
                           <span className="absolute inset-0 flex items-center justify-center">
                             <svg
                               className="w-4 h-4 drop-shadow"
-                              style={{ color: isLightColor(color.hex) ? '#1f2937' : '#ffffff' }}
+                              style={{ color: '#E8FF47' }}
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -455,14 +581,17 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                             </svg>
                           </span>
                         )}
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 text-[10px] bg-gray-900 text-white rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        <span
+                          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
+                          style={{ background: '#1A1A1A', color: '#F5F5F5', border: '1px solid #2A2A2A' }}
+                        >
                           {color.label}
                         </span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-2">
+                <p className="text-[10px] mt-2" style={{ color: '#444444' }}>
                   Click a color to preview · check multiple for bulk ordering
                 </p>
               </div>
@@ -470,10 +599,22 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
             {/* Bulk quantity grid */}
             <div>
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">
+              <h2
+                className="text-sm mb-3"
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 600,
+                  color: '#F5F5F5',
+                }}
+              >
                 Sizes &amp; Quantities
                 {totalUnits > 0 && (
-                  <span className="ml-2 text-xs font-normal text-gray-400">{totalUnits} units</span>
+                  <span
+                    className="ml-2 text-xs font-normal"
+                    style={{ color: '#888888' }}
+                  >
+                    {totalUnits} units
+                  </span>
                 )}
               </h2>
               <BulkOrderGrid
@@ -490,7 +631,7 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
             <div className="flex flex-col gap-3 pt-1">
               {/* Hint copy when not ready */}
               {!canAct && (
-                <p className="text-xs text-center text-gray-400">
+                <p className="text-xs text-center" style={{ color: '#888888' }}>
                   {totalUnits === 0 && !hasAnyDesign
                     ? 'Add a design and enter quantities to continue'
                     : totalUnits === 0
@@ -503,7 +644,23 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
               <button
                 onClick={handleSaveDesign}
                 disabled={!canAct || saveState === 'saving'}
-                className="w-full py-3.5 rounded-xl border-2 border-[#01696f] text-[#01696f] font-semibold text-sm hover:bg-[#01696f]/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full py-3.5 transition-colors disabled:cursor-not-allowed"
+                style={{
+                  border: '1px solid #3A3A3A',
+                  color: '#F5F5F5',
+                  background: 'transparent',
+                  borderRadius: '8px',
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 600,
+                  fontSize: '14px',
+                  opacity: (!canAct || saveState === 'saving') ? 0.5 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = '#888888';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.borderColor = '#3A3A3A';
+                }}
               >
                 {saveState === 'saving'
                   ? 'Saving…'
@@ -512,20 +669,37 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                   : 'Save Design'}
               </button>
               {saveState === 'done' && (
-                <p className="text-xs text-center text-green-700 font-medium">
+                <p className="text-xs text-center font-medium" style={{ color: '#E8FF47' }}>
                   ✓ Saved to your account —{' '}
-                  <a href="/account/designs" className="underline hover:text-green-900">view designs</a>
+                  <a href="/account/designs" className="underline" style={{ color: '#E8FF47' }}>view designs</a>
                 </p>
               )}
               {saveState === 'error' && (
-                <p className="text-xs text-center text-red-600">{saveError || 'Something went wrong.'}</p>
+                <p className="text-xs text-center" style={{ color: '#FF4747' }}>{saveError || 'Something went wrong.'}</p>
               )}
 
               {/* Add to Cart */}
               <button
                 onClick={handleAddToCart}
                 disabled={!canAct || cartState === 'adding'}
-                className="w-full py-4 rounded-xl bg-[#01696f] text-white font-semibold text-sm hover:bg-[#0c4e54] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                className="w-full py-4 transition-colors disabled:cursor-not-allowed"
+                style={{
+                  background: '#E8FF47',
+                  color: '#0A0A0A',
+                  borderRadius: '8px',
+                  fontFamily: "'Inter', sans-serif",
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  boxShadow: '0 0 20px rgba(232,255,71,0.25)',
+                  opacity: (!canAct || cartState === 'adding') ? 0.5 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (canAct && cartState !== 'adding')
+                    (e.currentTarget as HTMLButtonElement).style.background = '#C8DF1F';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.background = '#E8FF47';
+                }}
               >
                 {cartState === 'adding'
                   ? 'Adding…'
@@ -534,13 +708,13 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                   : 'Add to Cart'}
               </button>
               {cartState === 'added' && (
-                <p className="text-xs text-center text-green-700 font-medium">
+                <p className="text-xs text-center font-medium" style={{ color: '#E8FF47' }}>
                   ✓ In your cart —{' '}
-                  <a href="/account/cart" className="underline hover:text-green-900">view cart</a>
+                  <a href="/account/cart" className="underline" style={{ color: '#E8FF47' }}>view cart</a>
                 </p>
               )}
               {cartState === 'error' && (
-                <p className="text-xs text-center text-red-600">{cartError || 'Something went wrong.'}</p>
+                <p className="text-xs text-center" style={{ color: '#FF4747' }}>{cartError || 'Something went wrong.'}</p>
               )}
             </div>
           </div>
