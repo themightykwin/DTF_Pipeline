@@ -347,20 +347,36 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
             {/* Thumbnail strip — always visible when multiple images */}
             {images.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1">
-                {images.map((img, i) => (
-                  <button
-                    key={img.id}
-                    onClick={() => handleThumbnailClick(i)}
-                    title={img.altText ?? undefined}
-                    className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                      i === activeImageIdx
-                        ? 'border-[#01696f]'
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
-                  >
-                    <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-contain bg-white" />
-                  </button>
-                ))}
+                {images.map((img, i) => {
+                  // Use front design for thumbnail overlay; fall back to back
+                  const thumbDesign = design.front ?? design.back ?? null;
+                  return (
+                    <button
+                      key={img.id}
+                      onClick={() => handleThumbnailClick(i)}
+                      title={img.altText ?? undefined}
+                      className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
+                        i === activeImageIdx
+                          ? 'border-[#01696f]'
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      {hasAnyDesign && thumbDesign ? (
+                        <GarmentPreview
+                          imageSrc={img.storageUrl}
+                          imageAlt={img.altText ?? ''}
+                          garmentType={product.productType}
+                          artworkUrl={thumbDesign.artworkUrl}
+                          transform={thumbDesign.transform}
+                          interactive={false}
+                          className="w-full h-full"
+                        />
+                      ) : (
+                        <img src={img.storageUrl} alt={img.altText ?? ''} className="w-full h-full object-contain bg-white" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
