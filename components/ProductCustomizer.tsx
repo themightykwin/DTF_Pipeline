@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import BulkOrderGrid from '@/components/BulkOrderGrid';
 import GarmentPreview, { ArtworkTransform } from '@/components/GarmentPreview';
 import type { DesignOutput, SideDesign } from '@/components/DesignerModal';
+import type { SavedConfig } from '@/app/products/[id]/page';
 
 const DesignerModal = dynamic(() => import('@/components/DesignerModal'), { ssr: false });
 
@@ -41,24 +42,34 @@ function findImageForColor(images: ProductImage[], colorLabel: string): number {
   return featured !== -1 ? featured : 0;
 }
 
-export default function ProductCustomizer({ product }: { product: Product }) {
+export default function ProductCustomizer({ product, savedConfig }: { product: Product; savedConfig?: SavedConfig | null }) {
   const { availableSizes, availableColors, images } = product;
 
+  // ── Seed initial color from savedConfig or first available color ──
+  const initialColor = savedConfig?.selectedColors?.[0] ?? (availableColors.length > 0 ? availableColors[0].label : '');
+  const initialColors = savedConfig?.selectedColors?.length
+    ? savedConfig.selectedColors
+    : availableColors.length > 0 ? [availableColors[0].label] : [];
+
   // Active image index — drives both the main preview and the designer canvas
-  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [activeImageIdx, setActiveImageIdx] = useState(() => {
+    if (savedConfig?.selectedColors?.[0] && images.length > 1) {
+      const idx = images.findIndex(img => img.altText?.toLowerCase().includes(savedConfig.selectedColors[0].toLowerCase()));
+      return idx !== -1 ? idx : 0;
+    }
+    return 0;
+  });
   const activeImage = images[activeImageIdx] ?? images[0] ?? null;
 
   // Single selected color (for image switching)
-  const [activeColor, setActiveColor] = useState<string>(
-    availableColors.length > 0 ? availableColors[0].label : ''
-  );
+  const [activeColor, setActiveColor] = useState<string>(initialColor);
   // Multi-select for bulk grid
-  const [selectedColors, setSelectedColors] = useState<string[]>(
-    availableColors.length > 0 ? [availableColors[0].label] : []
-  );
+  const [selectedColors, setSelectedColors] = useState<string[]>(initialColors);
 
-  // Bulk quantity grid
-  const [quantities, setQuantities] = useState<Record<string, Record<string, number>>>({});
+  // Bulk quantity grid — seed from savedConfig if present
+  const [quantities, setQuantities] = useState<Record<string, Record<string, number>>>(
+    savedConfig?.quantities ?? {}
+  );
   const handleQtyChange = useCallback((colorLabel: string, size: string, qty: number) => {
     setQuantities((prev) => ({
       ...prev,
@@ -71,11 +82,28 @@ export default function ProductCustomizer({ product }: { product: Product }) {
     0
   );
 
-  // Design state
-  const [design, setDesign] = useState<DesignOutput>({ front: null, back: null });
+  // Design state — seed artwork from savedConfig if present
+  const [design, setDesign] = useState<DesignOutput>(() => {
+    if (!savedConfig?.artworkUrl) return { front: null, back: null };
+    const DEFAULT_T = { xPct: 0.5, yPct: 0.4, scalePct: 80 };
+    const frontSide: SideDesign | null = savedConfig.front || savedConfig.artworkUrl
+      ? {
+          artUploadId: savedConfig.artUploadId ?? '',
+          artworkUrl:  savedConfig.artworkUrl ?? '',
+          transform:   savedConfig.front ?? DEFAULT_T,
+        }
+      : null;
+    const backSide: SideDesign | null = savedConfig.back
+      ? {
+          artUploadId: savedConfig.artUploadId ?? '',
+          artworkUrl:  savedConfig.artworkUrl ?? '',
+          transform:   savedConfig.back,
+        }
+      : null;
+    return { front: frontSide, back: backSide };
+  });
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
   const [designerOpen, setDesignerOpen] = useState(false);
-
   const currentSideDesign: SideDesign | null = design[previewSide];
   const hasAnyDesign = !!(design.front || design.back);
 
@@ -105,7 +133,8 @@ export default function ProductCustomizer({ product }: { product: Product }) {
   // ── Action state ──────────────────────────────────────────────────────────
   const [saveState, setSaveState]   = useState<'idle' | 'saving' | 'done' | 'error'>('idle');
   const [cartState, setCartState]   = useState<'idle' | 'adding' | 'added' | 'error'>('idle');
-  const [configId,  setConfigId]    = useState<string | null>(null);
+  // Pre-seed with the saved config ID so reorders reuse the existing record
+  const [configId,  setConfigId]    = useState<string | null>(savedConfig?.configurationId ?? null);
   const [saveError, setSaveError]   = useState('');
   const [cartError, setCartError]   = useState('');
 
@@ -338,6 +367,16 @@ export default function ProductCustomizer({ product }: { product: Product }) {
 
           {/* ── RIGHT: Controls ── */}
           <div className="flex flex-col gap-7">
+
+            {/* Reorder banner */}
+            {savedConfig && (
+              <div className="flex items-center gap-2 px-3 py-2.5 bg-[#01696f]/8 border border-[#01696f]/20 rounded-xl text-xs text-[#01696f] font-medium">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Saved design loaded — update quantities or colors and add to cart.
+              </div>
+            )}
 
             {/* Product info */}
             <div>

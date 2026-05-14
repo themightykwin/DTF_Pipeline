@@ -51,7 +51,7 @@ export default function DesignCard({
         )}
         <div className="mt-3">
           <Link
-            href={`/products/${catalogProductId ?? ''}`}
+            href={`/products/${catalogProductId ?? ''}?configId=${designId}`}
             className="block w-full text-center py-2 text-xs font-semibold bg-[#01696f] text-white rounded-lg hover:bg-[#0c4e54] transition-colors"
           >
             Reorder
