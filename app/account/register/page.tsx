@@ -1,20 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function CustomerRegisterPage() {
-  const router = useRouter();
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm]   = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    if (password !== confirm) { setError('Passwords do not match.'); return; }
     setLoading(true);
     try {
       const res = await fetch('/api/customer/auth/register', {
@@ -23,12 +23,11 @@ export default function CustomerRegisterPage() {
         body: JSON.stringify({ name, email, password }),
       });
       const json = await res.json() as { ok: boolean; error?: { message: string } };
-      if (!json.ok) { setError(json.error?.message ?? 'Registration failed.'); return; }
-      router.push('/account');
-      router.refresh();
+      if (!json.ok) { setError(json.error?.message ?? 'Registration failed.'); setLoading(false); return; }
+      // Hard navigate so the browser sends the new session cookie
+      window.location.href = '/account';
     } catch {
       setError('Something went wrong. Please try again.');
-    } finally {
       setLoading(false);
     }
   }
@@ -36,38 +35,44 @@ export default function CustomerRegisterPage() {
   return (
     <main className="min-h-screen bg-[#f7f6f2] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
+        {/* Header */}
         <div className="mb-8 text-center">
           <Link href="/" className="text-xl font-bold text-gray-900 tracking-tight">DTF Pipeline</Link>
           <p className="text-sm text-gray-500 mt-2">Create your account</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Name</label>
               <input
                 type="text" value={name} onChange={e => setName(e.target.value)}
-                autoComplete="name"
+                autoComplete="name" placeholder="Your name"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-                placeholder="Your name"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                required autoComplete="email"
+                required autoComplete="email" placeholder="you@example.com"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-                placeholder="you@example.com"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
-                required minLength={8} autoComplete="new-password"
+                required autoComplete="new-password" placeholder="At least 8 characters"
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
-                placeholder="At least 8 characters"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm Password</label>
+              <input
+                type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+                required autoComplete="new-password" placeholder="Repeat password"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#01696f]/30 focus:border-[#01696f]"
               />
             </div>
 
@@ -77,7 +82,7 @@ export default function CustomerRegisterPage() {
 
             <button
               type="submit" disabled={loading}
-              className="w-full py-3 bg-[#01696f] text-white font-semibold text-sm rounded-xl hover:bg-[#0c4e54] transition-colors disabled:opacity-50"
+              className="w-full py-3 bg-[#01696f] text-white font-semibold text-sm rounded-xl hover:bg-[#0c4e54] transition-colors disabled:opacity-50 mt-2"
             >
               {loading ? 'Creating account…' : 'Create Account'}
             </button>

@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { usePathname } from 'next/navigation';
+import LogoutButton from '@/components/account/LogoutButton';
 
 const NAV_LINKS = [
-  { href: '/account',          label: 'Dashboard' },
-  { href: '/account/designs',  label: 'My Designs' },
-  { href: '/account/cart',     label: 'Cart'       },
-  { href: '/account/orders',   label: 'Orders'     },
+  { href: '/account',         label: 'Dashboard' },
+  { href: '/account/designs', label: 'My Designs' },
+  { href: '/account/cart',    label: 'Cart'       },
+  { href: '/account/orders',  label: 'Orders'     },
 ];
 
 interface AccountHeaderProps {
@@ -17,24 +17,12 @@ interface AccountHeaderProps {
 
 export default function AccountHeader({ email }: AccountHeaderProps) {
   const pathname = usePathname();
-  const router   = useRouter();
-  const [loggingOut, setLoggingOut] = useState(false);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    try {
-      await fetch('/api/customer/auth/logout', { method: 'POST' });
-    } finally {
-      router.push('/account/login');
-      router.refresh();
-    }
-  }
 
   return (
     <header className="bg-white border-b border-gray-100">
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Brand */}
-        <Link href="/products" className="text-lg font-bold text-gray-900 tracking-tight">
+        <Link href="/account" className="text-lg font-bold text-gray-900 tracking-tight">
           DTF Pipeline
         </Link>
 
@@ -61,18 +49,15 @@ export default function AccountHeader({ email }: AccountHeaderProps) {
           })}
         </nav>
 
-        {/* Right side — email + logout */}
+        {/* Right side */}
         <div className="flex items-center gap-3">
           <span className="hidden md:block text-xs text-gray-400 truncate max-w-[160px]">
             {email}
           </span>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
+          <LogoutButton
+            label="Sign out"
             className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors disabled:opacity-50"
-          >
-            {loggingOut ? 'Signing out…' : 'Sign out'}
-          </button>
+          />
         </div>
       </div>
 
