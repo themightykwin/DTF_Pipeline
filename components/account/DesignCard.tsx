@@ -16,6 +16,7 @@ interface DesignCardProps {
 }
 
 export default function DesignCard({
+  designId,
   label,
   garmentType,
   garmentImageSrc,
