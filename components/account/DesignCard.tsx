@@ -49,18 +49,12 @@ export default function DesignCard({
             {selectedColors.length > 0 ? ` · ${selectedColors.join(', ')}` : ''}
           </p>
         )}
-        <div className="flex gap-2 mt-3">
+        <div className="mt-3">
           <Link
             href={`/products/${catalogProductId ?? ''}`}
-            className="flex-1 text-center py-1.5 text-xs font-medium text-[#01696f] border border-[#01696f]/30 rounded-lg hover:bg-[#01696f]/5 transition-colors"
+            className="block w-full text-center py-2 text-xs font-semibold bg-[#01696f] text-white rounded-lg hover:bg-[#0c4e54] transition-colors"
           >
-            Edit
-          </Link>
-          <Link
-            href="/account/cart"
-            className="flex-1 text-center py-1.5 text-xs font-medium bg-[#01696f] text-white rounded-lg hover:bg-[#0c4e54] transition-colors"
-          >
-            Add to Cart
+            Reorder
           </Link>
         </div>
       </div>
