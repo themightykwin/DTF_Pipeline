@@ -454,16 +454,44 @@ export default function DesignerModal({
                 </div>
               )}
 
-              {current.validation && (
-                <div className={`rounded-xl p-3 text-xs ${
-                  current.validation.status === 'pass' ? 'bg-green-900/30 text-green-400'
-                  : current.validation.status === 'warn' ? 'bg-yellow-900/30 text-yellow-400'
-                  : 'bg-red-900/30 text-red-400'
-                }`}>
-                  <p className="font-semibold mb-0.5">{current.validation.summary}</p>
-                  <p className="opacity-80">{current.validation.detail}</p>
-                </div>
-              )}
+              {current.validation && (() => {
+                const v = current.validation!;
+                const isPass = v.status === 'pass';
+                const isWarn = v.status === 'warn';
+                const accent = isPass ? '#4ade80' : isWarn ? '#facc15' : '#f87171';
+                const bg     = isPass ? 'rgba(74,222,128,0.08)'  : isWarn ? 'rgba(250,204,21,0.08)'  : 'rgba(248,113,113,0.08)';
+                const border = isPass ? 'rgba(74,222,128,0.25)'  : isWarn ? 'rgba(250,204,21,0.25)'  : 'rgba(248,113,113,0.25)';
+                return (
+                  <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: '10px', padding: '10px 12px' }}>
+                    <p style={{ fontSize: '11px', fontWeight: 700, color: accent, marginBottom: '3px' }}>
+                      {isPass ? '✓' : isWarn ? '⚠' : '✕'} {v.summary}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '8px' }}>
+                      {v.detail}
+                    </p>
+                    {!isPass && (
+                      <div style={{ borderTop: `1px solid ${border}`, paddingTop: '7px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                          <span style={{ color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Required</span>
+                          <span style={{ color: '#C0C0C0', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+                            {v.required.widthPx.toLocaleString()} × {v.required.heightPx.toLocaleString()} px
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                          <span style={{ color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your file</span>
+                          <span style={{ color: accent, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+                            {v.actual.widthPx.toLocaleString()} × {v.actual.heightPx.toLocaleString()} px ({v.qualityPct}%)
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+                          <span style={{ color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min DPI needed</span>
+                          <span style={{ color: '#C0C0C0', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>300 DPI</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="bg-white/5 rounded-xl p-4 text-xs text-gray-400 leading-relaxed">
                 <span className="text-white font-medium">Tip:</span> Switch Front / Back below the canvas. Use + / − to zoom in for precise placement.
               </div>
