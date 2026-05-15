@@ -35,8 +35,8 @@ const CREATE_OPTIONS = `#graphql
   }`;
 
 const BULK_CREATE_VARIANTS = `#graphql
-  mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-    productVariantsBulkCreate(productId: $productId, variants: $variants) {
+  mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!, $strategy: ProductVariantsBulkCreateStrategy) {
+    productVariantsBulkCreate(productId: $productId, variants: $variants, strategy: $strategy) {
       productVariants {
         id
         selectedOptions { name value }
@@ -239,6 +239,7 @@ export async function POST(req: NextRequest) {
     const variantsResult = await client.request(BULK_CREATE_VARIANTS, {
       variables: {
         productId: shopifyProductId,
+        strategy: 'REMOVE_STANDALONE_VARIANT',
         variants: variantDefs.map(({ color, size }) => ({
           optionValues: [
             { optionId: colorOptId, name: color },
