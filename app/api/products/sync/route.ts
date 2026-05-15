@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getShopifyClient } from '@/lib/shopify';
+import { fetchClientCredentialsToken } from '@/lib/shopify-token';
 
 const CREATE_PRODUCT = `#graphql
   mutation productCreate($input: ProductInput!) {
@@ -155,7 +156,17 @@ export async function POST(req: NextRequest) {
     console.log('[sync] variantInputs:', JSON.stringify(variantInputs));
 
     // 7. Create Shopify product
-    const client = getShopifyClient(shopDomain, shop.accessTokenEncrypted);
+    // Always refresh token via client credentials — tokens expire in 24h
+    let adminToken = shop.accessTokenEncrypted;
+    try {
+      const fresh = await fetchClientCredentialsToken(shopDomain);
+      adminToken = fresh;
+      // Persist updated token
+      await prisma.shop.update({ where: { id: shop.id }, data: { accessTokenEncrypted: fresh } });
+    } catch (refreshErr) {
+      console.warn('[sync] token refresh failed, using stored token:', refreshErr);
+    }
+    const client = getShopifyClient(shopDomain, adminToken);
     const shortId = configurationId.slice(0, 8);
     const productTitle = config.catalogProduct?.title
       ? `${config.catalogProduct.title} — DTF #${shortId}`
