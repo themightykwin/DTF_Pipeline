@@ -57,9 +57,11 @@ const ATTACH_IMAGE = `#graphql
 
 export async function POST(req: NextRequest) {
   try {
-    const { shopDomain, configurationId } = await req.json() as {
+    const { shopDomain, configurationId, quantities: liveQuantities, selectedColors: liveColors } = await req.json() as {
       shopDomain: string;
       configurationId: string;
+      quantities?: Record<string, Record<string, number>>;
+      selectedColors?: string[];
     };
 
     console.log('[sync] shopDomain:', shopDomain, '| configurationId:', configurationId);
@@ -90,41 +92,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Return early if already synced
+    // 3. Never return early if live quantities differ from what was synced —
+    //    delete the stale record and re-sync with current quantities.
+    //    For simplicity: always re-sync (delete existing record first).
     if (config.shopifyProduct) {
-      let variantMap: Record<string, string> = {};
-      try { variantMap = JSON.parse(config.shopifyProduct.metafieldNamespace); } catch {}
-      console.log('[sync] already synced, returning existing');
-      return NextResponse.json({
-        ok: true,
-        data: {
-          configurationId,
-          shopifyProductId: config.shopifyProduct.shopifyProductId,
-          shopifyVariantId: config.shopifyProduct.shopifyVariantId,
-          variantMap,
-          status: 'existing',
-        },
-      });
+      await prisma.shopifyProduct.delete({ where: { configurationId } });
+      console.log('[sync] deleted stale shopifyProduct record, re-syncing with live quantities');
     }
 
-    // 4. Parse configJson
+    // 4. Determine quantities — prefer live quantities from checkout request,
+    //    fall back to what was saved in configJson.
     type ConfigInputs = {
       selectedColors?: string[];
       quantities?: Record<string, Record<string, number>>;
     };
-    let inputs: ConfigInputs = {};
+    let savedInputs: ConfigInputs = {};
     try {
       const parsed = JSON.parse(config.configJson ?? '{}') as { inputs?: ConfigInputs };
-      inputs = parsed.inputs ?? {};
+      savedInputs = parsed.inputs ?? {};
     } catch {}
 
-    const savedQuantities: Record<string, Record<string, number>> = inputs.quantities ?? {};
-    const savedColors: string[] = inputs.selectedColors ?? [];
-    const effectiveColors = Object.keys(savedQuantities).length > 0
-      ? Object.keys(savedQuantities)
-      : savedColors;
+    const quantities = (liveQuantities && Object.keys(liveQuantities).length > 0)
+      ? liveQuantities
+      : (savedInputs.quantities ?? {});
+    const colors = (liveColors && liveColors.length > 0)
+      ? liveColors
+      : (savedInputs.selectedColors ?? []);
 
-    console.log('[sync] effectiveColors:', effectiveColors, '| quantities:', JSON.stringify(savedQuantities));
+    const effectiveColors = Object.keys(quantities).length > 0
+      ? Object.keys(quantities)
+      : colors;
+
+    console.log('[sync] effectiveColors:', effectiveColors, '| quantities:', JSON.stringify(quantities));
 
     // 5. Determine base price
     const catalogPrice = config.catalogProduct?.basePriceCents ?? 0;

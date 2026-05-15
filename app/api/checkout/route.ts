@@ -164,17 +164,19 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── Sync to Shopify if needed ─────────────────────────────────────────
+      // ── Always sync with live quantities ────────────────────────────────────
+      // The sync route deletes any stale ShopifyProduct record and recreates
+      // with the exact quantities/colors from this checkout request.
       let variantMap: Record<string, string> = {};
       let defaultVariantId: string | null = null;
 
-      if (!config.shopifyProduct) {
+      {
         console.log('[checkout] syncing config to Shopify...');
         const appUrl = process.env.NEXTAUTH_URL ?? `https://dtfpipeline-production.up.railway.app`;
         const syncRes = await fetch(`${appUrl}/api/products/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ shopDomain, configurationId }),
+          body: JSON.stringify({ shopDomain, configurationId, quantities, selectedColors }),
         });
         const syncJson = await syncRes.json() as {
           ok: boolean;
@@ -194,10 +196,7 @@ export async function POST(req: NextRequest) {
 
         variantMap = syncJson.data?.variantMap ?? {};
         defaultVariantId = syncJson.data?.shopifyVariantId ?? null;
-      } else {
-        try { variantMap = JSON.parse(config.shopifyProduct.metafieldKey ?? '{}'); } catch { variantMap = {}; }
-        defaultVariantId = config.shopifyProduct.shopifyVariantId;
-        console.log('[checkout] existing shopifyProduct, variantMap:', JSON.stringify(variantMap), '| defaultVariantId:', defaultVariantId);
+        console.log('[checkout] sync complete, variantMap:', JSON.stringify(variantMap));
       }
 
       // ── Build line items ───────────────────────────────────────────────────
