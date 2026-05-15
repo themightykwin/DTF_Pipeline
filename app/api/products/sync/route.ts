@@ -141,8 +141,9 @@ export async function POST(req: NextRequest) {
     const variantDefs: VariantDef[] = [];
 
     for (const color of effectiveColors) {
-      const sizeMap = savedQuantities[color] ?? {};
-      for (const [size, qty] of Object.entries(sizeMap)) {
+      const sizeMap = quantities[color] ?? {};
+      for (const [size, qtyRaw] of Object.entries(sizeMap)) {
+        const qty = Number(qtyRaw);
         if (qty > 0) {
           colorSet.add(color);
           sizeSet.add(size);
