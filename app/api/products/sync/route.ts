@@ -39,8 +39,18 @@ const BULK_CREATE_VARIANTS = `#graphql
     productVariantsBulkCreate(productId: $productId, variants: $variants, strategy: $strategy) {
       productVariants {
         id
+        sku
         selectedOptions { name value }
+        inventoryItem { id }
       }
+      userErrors { field message }
+    }
+  }`;
+
+const SET_METAFIELD = `#graphql
+  mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+    metafieldsSet(metafields: $metafields) {
+      metafields { key value }
       userErrors { field message }
     }
   }`;
@@ -235,19 +245,41 @@ export async function POST(req: NextRequest) {
     const sizeOptId  = opts.find(o => o.name === 'Size')?.id ?? '';
     console.log('[sync] options created — colorOptId:', colorOptId, 'sizeOptId:', sizeOptId);
 
+    // Load catalog product for SKU/cost data
+    const catalogForSync = config.catalogProduct;
+    const skuPrefix = catalogForSync?.skuPrefix ?? null;
+    const costCents = catalogForSync?.costCents ?? 0;
+
+    // Build per-color SKU map from availableColors JSON
+    const colorSkuMap: Record<string, string> = {};
+    try {
+      const colors = JSON.parse(catalogForSync?.availableColors ?? '[]') as { label: string; hex: string; sku?: string }[];
+      for (const c of colors) { if (c.sku) colorSkuMap[c.label] = c.sku; }
+    } catch {}
+
     // 10. Step 3 — Bulk create variants
     const variantsResult = await client.request(BULK_CREATE_VARIANTS, {
       variables: {
         productId: shopifyProductId,
         strategy: 'REMOVE_STANDALONE_VARIANT',
-        variants: variantDefs.map(({ color, size }) => ({
-          optionValues: [
-            { optionId: colorOptId, name: color },
-            { optionId: sizeOptId,  name: size },
-          ],
-          price: priceStr,
-          inventoryPolicy: 'CONTINUE',
-        })),
+        variants: variantDefs.map(({ color, size }) => {
+          // SKU: per-color override > prefix-COLOR-SIZE > undefined
+          const colorSku = colorSkuMap[color];
+          const sku = colorSku
+            ? `${colorSku}-${size.toUpperCase()}`
+            : skuPrefix
+              ? `${skuPrefix}-${color.toUpperCase().replace(/\s+/g,'-')}-${size.toUpperCase()}`
+              : undefined;
+          return {
+            optionValues: [
+              { optionId: colorOptId, name: color },
+              { optionId: sizeOptId,  name: size },
+            ],
+            price: priceStr,
+            inventoryPolicy: 'CONTINUE',
+            ...(sku ? { sku } : {}),
+          };
+        }),
       },
     }) as {
       data: {
@@ -278,8 +310,54 @@ export async function POST(req: NextRequest) {
     }
     console.log('[sync] variantMap:', JSON.stringify(variantMap));
 
-    // 11. Step 4 — Attach artwork image (non-fatal)
+    // 11a. Set design image URL metafield on each variant + unit cost on inventory items
     const artworkUrl = config.artUpload?.storageUrl ?? config.catalogProduct?.images[0]?.storageUrl;
+    const variantNodes = variantsResult.data?.productVariantsBulkCreate?.productVariants ?? [];
+
+    // Variant metafields (design image URL)
+    if (artworkUrl && variantNodes.length > 0) {
+      try {
+        await client.request(SET_METAFIELD, {
+          variables: {
+            metafields: variantNodes.map(v => ({
+              ownerId: v.id,
+              namespace: 'dtf_pipeline',
+              key: 'design_image_url',
+              value: artworkUrl,
+              type: 'url',
+            })),
+          },
+        });
+        console.log('[sync] design_image_url metafield set on', variantNodes.length, 'variants');
+      } catch (e) {
+        console.warn('[sync] variant metafields failed (non-fatal):', e);
+      }
+    }
+
+    // Unit cost via inventoryItemUpdate
+    if (costCents > 0) {
+      const INVENTORY_ITEM_UPDATE = `#graphql
+        mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+          inventoryItemUpdate(id: $id, input: $input) {
+            inventoryItem { id }
+            userErrors { field message }
+          }
+        }`;
+      for (const v of variantNodes) {
+        const invId = (v as unknown as { inventoryItem?: { id: string } }).inventoryItem?.id;
+        if (!invId) continue;
+        try {
+          await client.request(INVENTORY_ITEM_UPDATE, {
+            variables: { id: invId, input: { cost: (costCents / 100).toFixed(2) } },
+          });
+        } catch (e) {
+          console.warn('[sync] inventoryItemUpdate failed (non-fatal):', e);
+        }
+      }
+      console.log('[sync] unit cost $' + (costCents/100).toFixed(2) + ' set on', variantNodes.length, 'variants');
+    }
+
+    // 11b. Attach artwork image to product media (non-fatal)
     if (artworkUrl) {
       try {
         await client.request(ATTACH_IMAGE, {

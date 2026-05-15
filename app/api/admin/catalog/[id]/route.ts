@@ -27,8 +27,10 @@ const patchSchema = z.object({
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']).optional(),
   availableSizes: z.array(z.string()).optional(),
-  availableColors: z.array(z.object({ label: z.string(), hex: z.string() })).optional(),
+  availableColors: z.array(z.object({ label: z.string(), hex: z.string(), sku: z.string().optional() })).optional(),
   basePriceCents: z.number().int().min(0).optional(),
+  costCents: z.number().int().min(0).optional(),
+  skuPrefix: z.string().optional(),
   status: z.enum(['draft', 'active', 'archived']).optional(),
   sortOrder: z.number().int().optional(),
 });

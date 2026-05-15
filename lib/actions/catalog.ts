@@ -7,16 +7,22 @@ import { requireAdminSession } from '@/lib/admin-auth';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
+const colorSchema = z.object({
+  label: z.string(),
+  hex: z.string(),
+  sku: z.string().optional(),   // per-color SKU override
+});
+
 const catalogProductSchema = z.object({
   shopId: z.string().cuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']),
   availableSizes: z.array(z.string()).min(1),
-  availableColors: z.array(
-    z.object({ label: z.string(), hex: z.string() })
-  ),
+  availableColors: z.array(colorSchema),
   basePriceCents: z.number().int().min(0),
+  costCents: z.number().int().min(0).default(0),
+  skuPrefix: z.string().optional(),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   sortOrder: z.number().int().default(0),
 });

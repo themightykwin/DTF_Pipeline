@@ -20,7 +20,7 @@ export default async function EditProductPage({ params }: Props) {
   const parsed = {
     ...product,
     availableSizes: JSON.parse(product.availableSizes) as string[],
-    availableColors: JSON.parse(product.availableColors) as { label: string; hex: string }[],
+    availableColors: (JSON.parse(product.availableColors) as { label: string; hex: string; sku?: string }[]).map(c => ({ ...c, sku: c.sku ?? '' })),
   };
 
   return (
