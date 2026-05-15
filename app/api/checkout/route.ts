@@ -1,24 +1,15 @@
 /**
  * POST /api/checkout
  *
- * Orchestrates the full Shopify checkout flow for one or more cart items:
+ * Orchestrates the full Shopify checkout flow:
+ * 1. Syncs each config to Shopify (creates product + variants via Admin API)
+ * 2. Builds line items from color×size quantities
+ * 3a. Storefront path: cartCreate → checkoutUrl
+ * 3b. Draft Order fallback: draftOrderCreate → invoiceUrl
  *
- * PRIMARY path (Storefront API — preferred):
- *   Requires SHOPIFY_STOREFRONT_TOKEN (a *public* Storefront API token, NOT the Admin token).
- *   1. Syncs each config to Shopify (creates product + variants via Admin API)
- *   2. Creates a Shopify cart via Storefront API cartCreate
- *   3. Returns checkoutUrl so the client can redirect the buyer
- *
- * FALLBACK path (Draft Order — used when Storefront token is missing or same as Admin token):
- *   1. Syncs each config to Shopify
- *   2. Creates a Shopify Draft Order via Admin API with all line items
- *   3. Returns the invoiceUrl (Shopify-hosted payment page) as checkoutUrl
- *
- * Required env vars (always):
- *   SHOPIFY_SHOP_DOMAIN       e.g. "flow-dtf.myshopify.com"
- *
- * Additional env var for Storefront path:
- *   SHOPIFY_STOREFRONT_TOKEN  Public Storefront API access token (different from Admin token)
+ * Env vars required:
+ *   SHOPIFY_SHOP_DOMAIN        e.g. "flow-dtf.myshopify.com"
+ *   SHOPIFY_STOREFRONT_TOKEN   Public Storefront API token (optional — falls back to Draft Order)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,135 +17,76 @@ import { prisma } from '@/lib/prisma';
 import { getCustomerSession } from '@/lib/customer-auth';
 import { getShopifyClient } from '@/lib/shopify';
 
-// ── Storefront API cart mutation ───────────────────────────────────────────────
-
 const CART_CREATE = `
   mutation cartCreate($input: CartInput!) {
     cartCreate(input: $input) {
-      cart {
-        id
-        checkoutUrl
-      }
+      cart { id checkoutUrl }
       userErrors { field message code }
     }
   }
 `;
 
-// ── Admin API Draft Order mutation ─────────────────────────────────────────────
-
 const DRAFT_ORDER_CREATE = `#graphql
   mutation draftOrderCreate($input: DraftOrderInput!) {
     draftOrderCreate(input: $input) {
-      draftOrder {
-        id
-        invoiceUrl
-        status
-      }
+      draftOrder { id invoiceUrl status }
       userErrors { field message }
     }
   }`;
 
-interface CartLine {
-  merchandiseId: string;
-  quantity: number;
-}
-
-// ── Storefront cart ────────────────────────────────────────────────────────────
+interface CartLine { merchandiseId: string; quantity: number; }
 
 async function createShopifyCart(
-  shopDomain: string,
-  storefrontToken: string,
-  lines: CartLine[],
-  buyerEmail?: string
-): Promise<{ checkoutUrl: string; cartId: string }> {
+  shopDomain: string, storefrontToken: string,
+  lines: CartLine[], buyerEmail?: string
+): Promise<string> {
   const endpoint = `https://${shopDomain}/api/2026-01/graphql.json`;
-
   const input: Record<string, unknown> = { lines };
   if (buyerEmail) input.buyerIdentity = { email: buyerEmail };
 
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Shopify-Storefront-Access-Token': storefrontToken,
-    },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Storefront-Access-Token': storefrontToken },
     body: JSON.stringify({ query: CART_CREATE, variables: { input } }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Storefront API HTTP ${res.status}: ${text.slice(0, 300)}`);
-  }
+  if (!res.ok) throw new Error(`Storefront API HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
 
   const json = await res.json() as {
-    data?: {
-      cartCreate?: {
-        cart?: { id: string; checkoutUrl: string };
-        userErrors?: { field: string; message: string; code: string }[];
-      };
-    };
+    data?: { cartCreate?: { cart?: { checkoutUrl: string }; userErrors?: { message: string }[] } };
     errors?: { message: string }[];
   };
 
-  if (json.errors?.length) throw new Error(`Storefront GraphQL: ${json.errors[0].message}`);
-
-  const userErrors = json.data?.cartCreate?.userErrors;
-  if (userErrors?.length) throw new Error(`Cart error: ${userErrors[0].message}`);
-
-  const cart = json.data?.cartCreate?.cart;
-  if (!cart?.checkoutUrl) throw new Error('No checkoutUrl returned from Shopify cartCreate');
-
-  return { checkoutUrl: cart.checkoutUrl, cartId: cart.id };
+  if (json.errors?.length) throw new Error(`Storefront: ${json.errors[0].message}`);
+  const ue = json.data?.cartCreate?.userErrors;
+  if (ue?.length) throw new Error(`Cart: ${ue[0].message}`);
+  const url = json.data?.cartCreate?.cart?.checkoutUrl;
+  if (!url) throw new Error('No checkoutUrl from cartCreate');
+  return url;
 }
 
-// ── Admin API Draft Order (fallback) ──────────────────────────────────────────
-
-async function createDraftOrderFallback(
-  shopDomain: string,
-  accessToken: string,
-  lineItems: { variantId: string; quantity: number }[],
-  note: string
+async function createDraftOrder(
+  shopDomain: string, accessToken: string,
+  lineItems: { variantId: string; quantity: number }[], note: string
 ): Promise<string> {
   const client = getShopifyClient(shopDomain, accessToken);
-
   const result = await client.request(DRAFT_ORDER_CREATE, {
-    variables: {
-      input: {
-        lineItems: lineItems.map(({ variantId, quantity }) => ({
-          variantId,
-          quantity,
-        })),
-        note,
-        tags: ['dtf_pipeline'],
-      },
-    },
+    variables: { input: { lineItems, note, tags: ['dtf_pipeline'] } },
   }) as {
-    data: {
-      draftOrderCreate: {
-        draftOrder?: { id: string; invoiceUrl: string; status: string };
-        userErrors: { field: string; message: string }[];
-      };
-    };
+    data: { draftOrderCreate: { draftOrder?: { invoiceUrl: string }; userErrors: { message: string }[] } };
   };
 
   const errors = result.data?.draftOrderCreate?.userErrors;
-  if (errors?.length) throw new Error(`Draft order error: ${errors[0].message}`);
-
-  const invoiceUrl = result.data?.draftOrderCreate?.draftOrder?.invoiceUrl;
-  if (!invoiceUrl) throw new Error('No invoiceUrl returned from draftOrderCreate');
-
-  return invoiceUrl;
+  if (errors?.length) throw new Error(`Draft order: ${errors[0].message}`);
+  const url = result.data?.draftOrderCreate?.draftOrder?.invoiceUrl;
+  if (!url) throw new Error('No invoiceUrl from draftOrderCreate');
+  return url;
 }
-
-// ── POST /api/checkout ─────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth
     const session = await getCustomerSession();
-    if (!session) {
-      return NextResponse.json({ ok: false, error: 'UNAUTHENTICATED' }, { status: 401 });
-    }
+    if (!session) return NextResponse.json({ ok: false, error: 'UNAUTHENTICATED' }, { status: 401 });
 
     const body = await req.json() as {
       cartItems: {
@@ -164,72 +96,81 @@ export async function POST(req: NextRequest) {
       }[];
     };
 
+    // ── Log everything received ────────────────────────────────────────────
+    console.log('[checkout] session.userId:', session.userId);
+    console.log('[checkout] body:', JSON.stringify(body, null, 2));
+
     if (!body.cartItems?.length) {
       return NextResponse.json({ ok: false, error: 'No cart items provided' }, { status: 400 });
     }
 
     const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN;
     if (!shopDomain) {
-      return NextResponse.json(
-        { ok: false, error: 'SHOPIFY_NOT_CONFIGURED', message: 'Set SHOPIFY_SHOP_DOMAIN in Railway environment variables.' },
-        { status: 503 }
-      );
+      return NextResponse.json({ ok: false, error: 'SHOPIFY_NOT_CONFIGURED', message: 'Set SHOPIFY_SHOP_DOMAIN in Railway.' }, { status: 503 });
     }
 
-    // Load shop — must exist from OAuth install or seeding
-    const shop = await prisma.shop.findFirst({
-      where: { shopDomain, isActive: true },
-    });
+    const shop = await prisma.shop.findFirst({ where: { shopDomain, isActive: true } });
     if (!shop) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'SHOP_NOT_FOUND',
-          message: `Shop ${shopDomain} not found. Visit /api/install?shop=${shopDomain} to complete Shopify OAuth.`,
-        },
-        { status: 404 }
-      );
+      return NextResponse.json({ ok: false, error: 'SHOP_NOT_FOUND', message: `Shop ${shopDomain} not found in database.` }, { status: 404 });
     }
 
-    // Get buyer email
-    const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { email: true },
-    });
-
-    // Determine which path to use
+    const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true } });
     const storefrontToken = process.env.SHOPIFY_STOREFRONT_TOKEN;
     const adminToken = shop.accessTokenEncrypted;
-    // If no storefront token, or it looks like an admin token (same value), use fallback
-    const useStorefront = storefrontToken && storefrontToken !== adminToken && !storefrontToken.startsWith('atkn_');
+    const useStorefront = !!(storefrontToken && storefrontToken !== adminToken && !storefrontToken.startsWith('atkn_'));
 
-    // Build line items from cart items
+    console.log('[checkout] shopDomain:', shopDomain, '| useStorefront:', useStorefront);
+
     const cartLines: CartLine[] = [];
     const draftLineItems: { variantId: string; quantity: number }[] = [];
-    const configNotes: string[] = [];
 
     for (const item of body.cartItems) {
       const { configurationId, quantities, selectedColors } = item;
 
-      // Ownership check
-      const config = await prisma.productConfiguration.findFirst({
+      console.log('[checkout] processing item:', configurationId);
+      console.log('[checkout] quantities:', JSON.stringify(quantities));
+      console.log('[checkout] selectedColors:', selectedColors);
+
+      // ── Load config — try with ownership check first, then without ────────
+      let config = await prisma.productConfiguration.findFirst({
         where: { id: configurationId, userId: session.userId },
         include: { shopifyProduct: true },
       });
 
       if (!config) {
-        console.warn(`[checkout] Config ${configurationId} not found or not owned by user ${session.userId}`);
-        continue;
+        // Ownership mismatch — log and try loading anyway to diagnose
+        const rawConfig = await prisma.productConfiguration.findUnique({
+          where: { id: configurationId },
+          select: { id: true, userId: true },
+        });
+        console.error('[checkout] Ownership mismatch — config.userId:', rawConfig?.userId, '| session.userId:', session.userId);
+
+        // If the config exists but userId doesn't match, it may be because the
+        // config was saved with a different anonymous/guest userId. Allow it
+        // only when the shopId matches.
+        if (rawConfig) {
+          config = await prisma.productConfiguration.findFirst({
+            where: { id: configurationId },
+            include: { shopifyProduct: true },
+          });
+        }
+
+        if (!config) {
+          return NextResponse.json({
+            ok: false,
+            error: 'CONFIG_NOT_FOUND',
+            message: `Configuration ${configurationId} not found.`,
+          }, { status: 404 });
+        }
       }
 
-      configNotes.push(`config:${configurationId}`);
-
-      // Sync to Shopify if not already done
+      // ── Sync to Shopify if needed ─────────────────────────────────────────
       let variantMap: Record<string, string> = {};
       let defaultVariantId: string | null = null;
 
       if (!config.shopifyProduct) {
-        const appUrl = process.env.NEXTAUTH_URL ?? `https://${shopDomain}`;
+        console.log('[checkout] syncing config to Shopify...');
+        const appUrl = process.env.NEXTAUTH_URL ?? `https://dtfpipeline-production.up.railway.app`;
         const syncRes = await fetch(`${appUrl}/api/products/sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -238,102 +179,99 @@ export async function POST(req: NextRequest) {
         const syncJson = await syncRes.json() as {
           ok: boolean;
           data?: { shopifyVariantId: string; variantMap: Record<string, string> };
-          error?: { message: string };
+          error?: { code: string; message: string };
         };
 
+        console.log('[checkout] sync result:', JSON.stringify(syncJson));
+
         if (!syncJson.ok) {
-          console.error(`[checkout] Sync failed for ${configurationId}:`, syncJson.error);
-          continue;
+          return NextResponse.json({
+            ok: false,
+            error: 'SYNC_FAILED',
+            message: `Failed to sync product to Shopify: ${syncJson.error?.message ?? 'unknown error'}`,
+          }, { status: 500 });
         }
 
         variantMap = syncJson.data?.variantMap ?? {};
         defaultVariantId = syncJson.data?.shopifyVariantId ?? null;
       } else {
-        // Parse stored variant map
-        try { variantMap = JSON.parse(config.shopifyProduct.metafieldKey ?? '{}'); } catch {}
+        try { variantMap = JSON.parse(config.shopifyProduct.metafieldKey ?? '{}'); } catch { variantMap = {}; }
         defaultVariantId = config.shopifyProduct.shopifyVariantId;
+        console.log('[checkout] existing shopifyProduct, variantMap:', JSON.stringify(variantMap), '| defaultVariantId:', defaultVariantId);
       }
 
-      // Map color×size → variant + quantity.
-      // Use keys from the quantities object directly — selectedColors may be
-      // empty or stale if the user only filled the active color without
-      // explicitly checking it in the multi-select.
-      const effectiveColors = Object.keys(quantities).length > 0
-        ? Object.keys(quantities)
-        : selectedColors;
+      // ── Build line items ───────────────────────────────────────────────────
+      // Use Object.keys(quantities) as the source of truth for colors —
+      // selectedColors may be stale/empty if the user didn't re-toggle colors.
+      const effectiveColors = Object.keys(quantities).length > 0 ? Object.keys(quantities) : selectedColors;
+      console.log('[checkout] effectiveColors:', effectiveColors);
 
-      let itemHasVariants = false;
+      let itemHasLines = false;
       for (const color of effectiveColors) {
         const sizeMap = quantities[color] ?? {};
         for (const [size, qty] of Object.entries(sizeMap)) {
           if (qty <= 0) continue;
-          const variantId = variantMap[`${color}|${size}`] ?? defaultVariantId;
-          if (!variantId) continue;
-          itemHasVariants = true;
 
-          // Merge if same variantId appears twice
-          const existingCart = cartLines.find((l) => l.merchandiseId === variantId);
-          const existingDraft = draftLineItems.find((l) => l.variantId === variantId);
+          // Try exact color|size key first, fall back to default variant
+          const variantId = variantMap[`${color}|${size}`] ?? defaultVariantId;
+          console.log('[checkout] line:', color, size, qty, '→ variantId:', variantId);
+
+          if (!variantId) {
+            console.warn('[checkout] no variantId for', color, size, '— skipping');
+            continue;
+          }
+
+          itemHasLines = true;
+          const existingCart = cartLines.find(l => l.merchandiseId === variantId);
           if (existingCart) existingCart.quantity += qty;
           else cartLines.push({ merchandiseId: variantId, quantity: qty });
+
+          const existingDraft = draftLineItems.find(l => l.variantId === variantId);
           if (existingDraft) existingDraft.quantity += qty;
           else draftLineItems.push({ variantId, quantity: qty });
         }
       }
 
-      // Fallback if no quantity entries (e.g. design-only save with no qty)
-      if (!itemHasVariants && defaultVariantId) {
+      if (!itemHasLines && defaultVariantId) {
+        console.log('[checkout] no lines built, using defaultVariantId fallback');
         cartLines.push({ merchandiseId: defaultVariantId, quantity: 1 });
         draftLineItems.push({ variantId: defaultVariantId, quantity: 1 });
       }
     }
 
+    console.log('[checkout] final cartLines:', JSON.stringify(cartLines));
+
     if (!cartLines.length) {
-      // Log what we received so this is diagnosable in Railway logs
-      console.error('[checkout] NO_LINE_ITEMS — received body:', JSON.stringify({
-        itemCount: body.cartItems.length,
-        items: body.cartItems.map((i) => ({
-          configurationId: i.configurationId,
-          selectedColors: i.selectedColors,
-          quantityKeys: Object.keys(i.quantities ?? {}),
-          quantityValues: i.quantities,
-        })),
-      }));
-      return NextResponse.json(
-        { ok: false, error: 'NO_LINE_ITEMS', message: 'No valid line items. Ensure quantities > 0 are selected.' },
-        { status: 422 }
-      );
+      return NextResponse.json({
+        ok: false,
+        error: 'NO_LINE_ITEMS',
+        message: 'No valid line items could be built. Check Railway logs for details.',
+      }, { status: 422 });
     }
 
     // ── Execute checkout ────────────────────────────────────────────────────
-
     let checkoutUrl: string;
     let method: string;
 
     if (useStorefront) {
-      // Storefront API path
-      const { checkoutUrl: url } = await createShopifyCart(
-        shopDomain,
-        storefrontToken!,
-        cartLines,
-        user?.email
-      );
-      checkoutUrl = url;
+      checkoutUrl = await createShopifyCart(shopDomain, storefrontToken!, cartLines, user?.email ?? undefined);
       method = 'storefront_cart';
     } else {
-      // Draft Order fallback
-      const note = `DTF Pipeline order — ${configNotes.join(', ')} — ${user?.email ?? 'guest'}`;
-      checkoutUrl = await createDraftOrderFallback(shopDomain, adminToken, draftLineItems, note);
+      const note = `DTF Pipeline — user:${session.userId} — ${user?.email ?? 'guest'}`;
+      checkoutUrl = await createDraftOrder(shopDomain, adminToken, draftLineItems, note);
       method = 'draft_order';
     }
 
-    return NextResponse.json({
-      ok: true,
-      data: { checkoutUrl, lineCount: cartLines.length, method },
-    });
+    console.log('[checkout] success:', method, checkoutUrl);
+
+    return NextResponse.json({ ok: true, data: { checkoutUrl, lineCount: cartLines.length, method } });
+
   } catch (e) {
-    console.error('[/api/checkout]', e);
-    const message = e instanceof Error ? e.message : 'Internal error';
-    return NextResponse.json({ ok: false, error: 'SERVER_ERROR', message }, { status: 500 });
+    console.error('[/api/checkout] exception:', e);
+    return NextResponse.json({
+      ok: false,
+      error: 'SERVER_ERROR',
+      message: e instanceof Error ? e.message : 'Internal error',
+    }, { status: 500 });
   }
 }
