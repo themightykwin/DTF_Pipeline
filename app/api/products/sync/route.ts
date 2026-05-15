@@ -127,8 +127,9 @@ export async function POST(req: NextRequest) {
     console.log('[sync] effectiveColors:', effectiveColors, '| quantities:', JSON.stringify(savedQuantities));
 
     // 5. Determine base price
-    const basePriceCents = config.catalogProduct?.basePriceCents > 0
-      ? config.catalogProduct.basePriceCents
+    const catalogPrice = config.catalogProduct?.basePriceCents ?? 0;
+    const basePriceCents = catalogPrice > 0
+      ? catalogPrice
       : config.priceSnapshot && config.priceSnapshot > 0
         ? Math.round(config.priceSnapshot * 100)
         : 1500;
@@ -154,7 +155,8 @@ export async function POST(req: NextRequest) {
     // Fallback if no qty was set at save time
     if (colorSet.size === 0) {
       for (const c of effectiveColors) colorSet.add(c);
-      const defaultSizes = (config.garmentTemplate?.availableSizes as string[] | undefined) ?? ['S', 'M', 'L', 'XL'];
+      const rawSizes = config.garmentTemplate?.availableSizes;
+      const defaultSizes: string[] = Array.isArray(rawSizes) ? (rawSizes as string[]) : ['S', 'M', 'L', 'XL'];
       for (const s of defaultSizes) sizeSet.add(s);
       for (const c of colorSet) for (const s of sizeSet) variantDefs.push({ color: c, size: s });
     }
