@@ -2,19 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getShopifyClient } from '@/lib/shopify';
 
-// ── GraphQL mutations ─────────────────────────────────────────────────────────
-
 const CREATE_PRODUCT = `#graphql
   mutation productCreate($input: ProductInput!) {
     productCreate(input: $input) {
       product {
         id
-        title
         variants(first: 100) {
           edges {
             node {
               id
-              title
               selectedOptions { name value }
             }
           }
@@ -24,18 +20,10 @@ const CREATE_PRODUCT = `#graphql
     }
   }`;
 
-const UPDATE_VARIANT_PRICE = `#graphql
-  mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-    productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-      productVariants { id price }
-      userErrors { field message }
-    }
-  }`;
-
 const ATTACH_IMAGE = `#graphql
   mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
     productCreateMedia(productId: $productId, media: $media) {
-      media { ... on MediaImage { id image { url } } }
+      media { ... on MediaImage { id } }
       mediaUserErrors { field message }
     }
   }`;
@@ -48,7 +36,6 @@ const SET_METAFIELD = `#graphql
     }
   }`;
 
-// ── POST /api/products/sync ────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { shopDomain, configurationId } = await req.json() as {
@@ -56,16 +43,19 @@ export async function POST(req: NextRequest) {
       configurationId: string;
     };
 
-    // 1. Load shop
-    const shop = await prisma.shop.findUnique({ where: { shopDomain } });
+    console.log('[sync] shopDomain:', shopDomain, 'configurationId:', configurationId);
+
+    // 1. Load shop (use findFirst — shopDomain is not the PK)
+    const shop = await prisma.shop.findFirst({ where: { shopDomain, isActive: true } });
     if (!shop) {
+      console.error('[sync] shop not found:', shopDomain);
       return NextResponse.json(
-        { ok: false, error: { code: 'SHOP_NOT_FOUND', message: 'Shop not found.' } },
+        { ok: false, error: { code: 'SHOP_NOT_FOUND', message: `Shop ${shopDomain} not found.` } },
         { status: 404 }
       );
     }
 
-    // 2. Load config with all relations
+    // 2. Load config
     const config = await prisma.productConfiguration.findUnique({
       where: { id: configurationId },
       include: {
@@ -84,81 +74,103 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Parse config inputs to get selected colors + quantities
-    type ConfigInputs = {
-      selectedColors?: string[];
-      quantities?: Record<string, Record<string, number>>;
-      front?: { transform?: Record<string, number> };
-      back?: { transform?: Record<string, number> };
-    };
-    let inputs: ConfigInputs = {};
-    try {
-      const parsed = JSON.parse(config.configJson) as { inputs?: ConfigInputs };
-      inputs = parsed.inputs ?? {};
-    } catch {}
+    console.log('[sync] config loaded, garmentType:', config.garmentTemplate?.garmentType);
 
-    const selectedColors: string[] = inputs.selectedColors ?? [];
-    const quantities: Record<string, Record<string, number>> = inputs.quantities ?? {};
-    const basePriceCents = config.catalogProduct?.basePriceCents ?? config.priceSnapshot
-      ? Math.round((config.priceSnapshot ?? 0) * 100)
-      : 1500; // fallback $15
-
-    // Build variant options: one per color×size that has qty > 0
-    type VariantDef = { color: string; size: string; qty: number };
-    const variantDefs: VariantDef[] = [];
-    for (const color of selectedColors) {
-      const sizeMap = quantities[color] ?? {};
-      for (const [size, qty] of Object.entries(sizeMap)) {
-        if (qty > 0) variantDefs.push({ color, size, qty });
-      }
-    }
-
-    // If already synced AND variants haven't changed, return existing
+    // 3. Return early if already synced — parse variantMap from metafieldNamespace
     if (config.shopifyProduct) {
+      let variantMap: Record<string, string> = {};
+      try { variantMap = JSON.parse(config.shopifyProduct.metafieldNamespace); } catch {}
+      console.log('[sync] already synced, returning existing');
       return NextResponse.json({
         ok: true,
         data: {
           configurationId,
           shopifyProductId: config.shopifyProduct.shopifyProductId,
           shopifyVariantId: config.shopifyProduct.shopifyVariantId,
-          variantMap: JSON.parse((config.shopifyProduct as unknown as { variantMapJson?: string }).variantMapJson ?? '{}'),
+          variantMap,
           status: 'existing',
         },
       });
     }
 
+    // 4. Parse configJson to get colors + quantities saved at config time
+    type ConfigInputs = {
+      selectedColors?: string[];
+      quantities?: Record<string, Record<string, number>>;
+    };
+    let inputs: ConfigInputs = {};
+    try {
+      const parsed = JSON.parse(config.configJson ?? '{}') as { inputs?: ConfigInputs };
+      inputs = parsed.inputs ?? {};
+    } catch {}
+
+    const savedColors: string[] = inputs.selectedColors ?? [];
+    const savedQuantities: Record<string, Record<string, number>> = inputs.quantities ?? {};
+
+    console.log('[sync] savedColors:', savedColors, 'savedQuantities:', JSON.stringify(savedQuantities));
+
+    // 5. Determine base price
+    const basePriceCents: number = (() => {
+      if (config.catalogProduct?.basePriceCents && config.catalogProduct.basePriceCents > 0) {
+        return config.catalogProduct.basePriceCents;
+      }
+      if (config.priceSnapshot && config.priceSnapshot > 0) {
+        return Math.round(config.priceSnapshot * 100);
+      }
+      return 1500; // $15 fallback
+    })();
+    const priceStr = (basePriceCents / 100).toFixed(2);
+
+    // 6. Build variants from saved quantities
+    //    Use Object.keys(savedQuantities) as color source (same logic as checkout)
+    const effectiveColors = Object.keys(savedQuantities).length > 0
+      ? Object.keys(savedQuantities)
+      : savedColors;
+
+    type VariantInput = { options: [string, string]; price: string; inventoryPolicy: string };
+    const variantInputs: VariantInput[] = [];
+
+    for (const color of effectiveColors) {
+      const sizeMap = savedQuantities[color] ?? {};
+      for (const [size, qty] of Object.entries(sizeMap)) {
+        if (qty > 0) {
+          variantInputs.push({ options: [color, size], price: priceStr, inventoryPolicy: 'CONTINUE' });
+        }
+      }
+    }
+
+    // If no variants with qty > 0, create one default variant per color (or a single default)
+    if (variantInputs.length === 0) {
+      if (effectiveColors.length > 0) {
+        for (const color of effectiveColors) {
+          const rawSizes = config.garmentTemplate?.availableSizes;
+          const sizes: string[] = Array.isArray(rawSizes) ? (rawSizes as string[]) : ['M'];
+          variantInputs.push({ options: [color, sizes[0]], price: priceStr, inventoryPolicy: 'CONTINUE' });
+        }
+      } else {
+        variantInputs.push({ options: ['Default', 'One Size'], price: priceStr, inventoryPolicy: 'CONTINUE' });
+      }
+    }
+
+    console.log('[sync] variantInputs:', JSON.stringify(variantInputs));
+
+    // 7. Create Shopify product
     const client = getShopifyClient(shopDomain, shop.accessTokenEncrypted);
-
-    // 4. Build variant input list
-    // Each variant gets Color + Size options
-    const variants = variantDefs.map(({ color, size }) => ({
-      options: [color, size],
-      price: (basePriceCents / 100).toFixed(2),
-      inventoryPolicy: 'CONTINUE',
-    }));
-
-    // If no variants defined yet (design saved before qty entered), create a single default
-    const productVariants = variants.length > 0 ? variants : [
-      { options: ['Default', 'One Size'], price: (basePriceCents / 100).toFixed(2), inventoryPolicy: 'CONTINUE' },
-    ];
-
-    // 5. Create the Shopify product
     const shortId = configurationId.slice(0, 8);
-    const garmentLabel = config.garmentTemplate.label;
     const productTitle = config.catalogProduct?.title
-      ? `${config.catalogProduct.title} — Custom DTF #${shortId}`
-      : `Custom ${garmentLabel} — #${shortId}`;
+      ? `${config.catalogProduct.title} — DTF #${shortId}`
+      : `Custom ${config.garmentTemplate?.label ?? 'Garment'} — #${shortId}`;
 
     const productResult = await client.request(CREATE_PRODUCT, {
       variables: {
         input: {
           title: productTitle,
-          productType: config.garmentTemplate.garmentType,
+          productType: config.garmentTemplate?.garmentType ?? 'tshirt',
           vendor: 'DTF Pipeline',
           status: 'ACTIVE',
-          tags: [`dtf_pipeline`, `config:${configurationId}`, `user:${config.userId}`],
+          tags: [`dtf_pipeline`, `config:${configurationId}`],
           options: ['Color', 'Size'],
-          variants: productVariants,
+          variants: variantInputs,
         },
       },
     }) as {
@@ -166,7 +178,7 @@ export async function POST(req: NextRequest) {
         productCreate: {
           product: {
             id: string;
-            variants: { edges: { node: { id: string; title: string; selectedOptions: { name: string; value: string }[] } }[] };
+            variants: { edges: { node: { id: string; selectedOptions: { name: string; value: string }[] } }[] };
           };
           userErrors: { field: string; message: string }[];
         };
@@ -175,88 +187,89 @@ export async function POST(req: NextRequest) {
 
     const createErrors = productResult.data?.productCreate?.userErrors;
     if (createErrors?.length) {
+      console.error('[sync] productCreate userErrors:', createErrors);
       return NextResponse.json(
         { ok: false, error: { code: 'SHOPIFY_USER_ERROR', message: createErrors[0].message } },
         { status: 422 }
       );
     }
 
-    const shopifyProduct = productResult.data.productCreate.product;
-    const shopifyProductId = shopifyProduct.id;
+    const shopifyProduct = productResult.data?.productCreate?.product;
+    if (!shopifyProduct) {
+      console.error('[sync] productCreate returned no product — full result:', JSON.stringify(productResult));
+      return NextResponse.json(
+        { ok: false, error: { code: 'NO_PRODUCT', message: 'Shopify returned no product.' } },
+        { status: 500 }
+      );
+    }
 
-    // Build a map: "Color|Size" → variantId  (and grab the first variantId as default)
+    const shopifyProductId = shopifyProduct.id;
+    console.log('[sync] created shopifyProductId:', shopifyProductId);
+
+    // 8. Build variant map: "Color|Size" → GID
     const variantMap: Record<string, string> = {};
     let firstVariantId = '';
-    for (const edge of shopifyProduct.variants.edges) {
-      const node = edge.node;
-      const color = node.selectedOptions.find((o) => o.name === 'Color')?.value ?? '';
-      const size = node.selectedOptions.find((o) => o.name === 'Size')?.value ?? '';
+    for (const { node } of shopifyProduct.variants.edges) {
+      const color = node.selectedOptions.find(o => o.name === 'Color')?.value ?? '';
+      const size = node.selectedOptions.find(o => o.name === 'Size')?.value ?? '';
       variantMap[`${color}|${size}`] = node.id;
       if (!firstVariantId) firstVariantId = node.id;
     }
 
-    // 6. Attach artwork image (Cloudinary URL) to the product
+    console.log('[sync] variantMap:', JSON.stringify(variantMap), '| firstVariantId:', firstVariantId);
+
+    // 9. Attach artwork image
     const artworkUrl = config.artUpload?.storageUrl ?? config.catalogProduct?.images[0]?.storageUrl;
     if (artworkUrl) {
-      await client.request(ATTACH_IMAGE, {
-        variables: {
-          productId: shopifyProductId,
-          media: [{ mediaContentType: 'IMAGE', originalSource: artworkUrl }],
-        },
-      });
+      try {
+        await client.request(ATTACH_IMAGE, {
+          variables: { productId: shopifyProductId, media: [{ mediaContentType: 'IMAGE', originalSource: artworkUrl }] },
+        });
+      } catch (imgErr) {
+        console.warn('[sync] image attach failed (non-fatal):', imgErr);
+      }
     }
 
-    // 7. Set metafields for traceability
-    await client.request(SET_METAFIELD, {
-      variables: {
-        metafields: [
-          {
+    // 10. Set metafield for traceability
+    try {
+      await client.request(SET_METAFIELD, {
+        variables: {
+          metafields: [{
             ownerId: shopifyProductId,
             namespace: 'dtf_pipeline',
             key: 'configuration_id',
             value: configurationId,
             type: 'single_line_text_field',
-          },
-          {
-            ownerId: shopifyProductId,
-            namespace: 'dtf_pipeline',
-            key: 'user_id',
-            value: config.userId,
-            type: 'single_line_text_field',
-          },
-        ],
-      },
-    });
+          }],
+        },
+      });
+    } catch (mfErr) {
+      console.warn('[sync] metafield set failed (non-fatal):', mfErr);
+    }
 
-    // 8. Persist the ShopifyProduct record
+    // 11. Persist ShopifyProduct record
+    //     Store variantMap JSON in metafieldNamespace (repurposed — schema has no variantMap column)
     await prisma.shopifyProduct.create({
       data: {
         shopId: shop.id,
         configurationId,
         shopifyProductId,
         shopifyVariantId: firstVariantId,
+        metafieldNamespace: JSON.stringify(variantMap), // ← variant map storage
+        metafieldKey: 'configuration_id',
         visibilityStatus: 'active',
-        // Store full variant map as metafield JSON in the DB
-        ...(Object.keys(variantMap).length > 0
-          ? { metafieldKey: JSON.stringify(variantMap) }
-          : {}),
       },
     });
 
     return NextResponse.json({
       ok: true,
-      data: {
-        configurationId,
-        shopifyProductId,
-        shopifyVariantId: firstVariantId,
-        variantMap,
-        status: 'synced',
-      },
+      data: { configurationId, shopifyProductId, shopifyVariantId: firstVariantId, variantMap, status: 'synced' },
     });
+
   } catch (e) {
-    console.error('[/api/products/sync]', e);
+    console.error('[/api/products/sync] exception:', e);
     return NextResponse.json(
-      { ok: false, error: { code: 'SERVER_ERROR', message: 'Internal error.' } },
+      { ok: false, error: { code: 'SERVER_ERROR', message: e instanceof Error ? e.message : 'Internal error.' } },
       { status: 500 }
     );
   }
