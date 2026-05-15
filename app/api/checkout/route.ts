@@ -254,9 +254,16 @@ export async function POST(req: NextRequest) {
         defaultVariantId = config.shopifyProduct.shopifyVariantId;
       }
 
-      // Map color×size → variant + quantity
+      // Map color×size → variant + quantity.
+      // Use keys from the quantities object directly — selectedColors may be
+      // empty or stale if the user only filled the active color without
+      // explicitly checking it in the multi-select.
+      const effectiveColors = Object.keys(quantities).length > 0
+        ? Object.keys(quantities)
+        : selectedColors;
+
       let itemHasVariants = false;
-      for (const color of selectedColors) {
+      for (const color of effectiveColors) {
         const sizeMap = quantities[color] ?? {};
         for (const [size, qty] of Object.entries(sizeMap)) {
           if (qty <= 0) continue;
@@ -282,6 +289,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (!cartLines.length) {
+      // Log what we received so this is diagnosable in Railway logs
+      console.error('[checkout] NO_LINE_ITEMS — received body:', JSON.stringify({
+        itemCount: body.cartItems.length,
+        items: body.cartItems.map((i) => ({
+          configurationId: i.configurationId,
+          selectedColors: i.selectedColors,
+          quantityKeys: Object.keys(i.quantities ?? {}),
+          quantityValues: i.quantities,
+        })),
+      }));
       return NextResponse.json(
         { ok: false, error: 'NO_LINE_ITEMS', message: 'No valid line items. Ensure quantities > 0 are selected.' },
         { status: 422 }

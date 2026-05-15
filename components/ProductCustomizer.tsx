@@ -113,12 +113,16 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
   function handleColorClick(color: { label: string; hex: string }) {
     setActiveColor(color.label);
-    // Toggle in/out of multi-select for bulk grid
-    setSelectedColors((prev) =>
-      prev.includes(color.label)
-        ? prev.filter((c) => c !== color.label)
-        : [...prev, color.label]
-    );
+    // Toggle in/out of multi-select for bulk grid.
+    // Never allow de-selecting the last remaining color.
+    setSelectedColors((prev) => {
+      if (prev.includes(color.label)) {
+        // Don't remove if it's the only selected color
+        if (prev.length <= 1) return prev;
+        return prev.filter((c) => c !== color.label);
+      }
+      return [...prev, color.label];
+    });
     // Switch to the most relevant image for this color
     if (images.length > 1) {
       const idx = findImageForColor(images, color.label);
