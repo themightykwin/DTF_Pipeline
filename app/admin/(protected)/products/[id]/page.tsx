@@ -20,21 +20,28 @@ export default async function EditProductPage({ params }: Props) {
   const parsed = {
     ...product,
     availableSizes: JSON.parse(product.availableSizes) as string[],
-    availableColors: (JSON.parse(product.availableColors) as { label: string; hex: string; sku?: string }[]).map(c => ({ ...c, sku: c.sku ?? '' })),
+    availableColors: (JSON.parse(product.availableColors) as { label: string; hex: string }[]),
+    variantSkus: product.variantSkus ?? null, // pass raw JSON string — ProductForm parses it
   };
 
   return (
-    <div className="max-w-2xl space-y-10">
+    <div style={{ maxWidth: '720px' }} className="space-y-10">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900 mb-1">Edit Product</h1>
-        <p className="text-sm text-gray-400">{product.id}</p>
+        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#F5F5F5', marginBottom: '4px', fontFamily: 'Syne, sans-serif' }}>
+          Edit Product
+        </h1>
+        <p style={{ fontSize: '12px', color: '#444', fontFamily: 'JetBrains Mono, monospace' }}>{product.id}</p>
       </div>
       <section>
-        <h2 className="text-sm font-medium text-gray-700 mb-4">Product Details</h2>
+        <h2 style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '16px' }}>
+          Product Details
+        </h2>
         <ProductForm product={parsed} />
       </section>
       <section>
-        <h2 className="text-sm font-medium text-gray-700 mb-4">Images</h2>
+        <h2 style={{ fontSize: '12px', fontWeight: 600, color: '#666', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '16px' }}>
+          Images
+        </h2>
         <ImageManager productId={product.id} images={product.images} />
       </section>
     </div>

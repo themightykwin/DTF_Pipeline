@@ -203,7 +203,7 @@ model CatalogProduct {
   availableColors String   // JSON array [{"label":"White","hex":"#ffffff"},...]
   basePriceCents  Int      @default(0)
   costCents       Int      @default(0)  // production cost per unit
-  skuPrefix       String?              // e.g. "FLOW-TEE" — variant SKU = skuPrefix-COLOR-SIZE
+  variantSkus     String?              // JSON map {"Color|Size": "SKU-VALUE"} for per-variant SKU lookup
   status          String   @default("draft") // draft | active | archived
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())

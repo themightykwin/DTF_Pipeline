@@ -247,14 +247,13 @@ export async function POST(req: NextRequest) {
 
     // Load catalog product for SKU/cost data
     const catalogForSync = config.catalogProduct;
-    const skuPrefix = catalogForSync?.skuPrefix ?? null;
     const costCents = catalogForSync?.costCents ?? 0;
 
-    // Build per-color SKU map from availableColors JSON
-    const colorSkuMap: Record<string, string> = {};
+    // Build variantSku map from variantSkus JSON: { "Color|Size": "SKU-VALUE" }
+    const variantSkuMap: Record<string, string> = {};
     try {
-      const colors = JSON.parse(catalogForSync?.availableColors ?? '[]') as { label: string; hex: string; sku?: string }[];
-      for (const c of colors) { if (c.sku) colorSkuMap[c.label] = c.sku; }
+      const raw = (catalogForSync as unknown as { variantSkus?: string | null })?.variantSkus;
+      if (raw) Object.assign(variantSkuMap, JSON.parse(raw) as Record<string, string>);
     } catch {}
 
     // 10. Step 3 — Bulk create variants
@@ -263,13 +262,8 @@ export async function POST(req: NextRequest) {
         productId: shopifyProductId,
         strategy: 'REMOVE_STANDALONE_VARIANT',
         variants: variantDefs.map(({ color, size }) => {
-          // SKU: per-color override > prefix-COLOR-SIZE > undefined
-          const colorSku = colorSkuMap[color];
-          const sku = colorSku
-            ? `${colorSku}-${size.toUpperCase()}`
-            : skuPrefix
-              ? `${skuPrefix}-${color.toUpperCase().replace(/\s+/g,'-')}-${size.toUpperCase()}`
-              : undefined;
+          // SKU: direct lookup from variantSkus map { "Color|Size": "SKU-VALUE" }
+          const sku = variantSkuMap[`${color}|${size}`] || undefined;
           return {
             optionValues: [
               { optionId: colorOptId, name: color },

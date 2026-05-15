@@ -22,7 +22,7 @@ const catalogProductSchema = z.object({
   availableColors: z.array(colorSchema),
   basePriceCents: z.number().int().min(0),
   costCents: z.number().int().min(0).default(0),
-  skuPrefix: z.string().optional(),
+  variantSkus: z.record(z.string(), z.string()).optional(), // { "Color|Size": "SKU" }
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   sortOrder: z.number().int().default(0),
 });
@@ -31,13 +31,14 @@ const catalogProductSchema = z.object({
 
 export async function createCatalogProduct(raw: unknown) {
   await requireAdminSession();
-  const { availableSizes, availableColors, ...rest } = catalogProductSchema.parse(raw);
+  const { availableSizes, availableColors, variantSkus, ...rest } = catalogProductSchema.parse(raw);
 
   const product = await prisma.catalogProduct.create({
     data: {
       ...rest,
       availableSizes: JSON.stringify(availableSizes),
       availableColors: JSON.stringify(availableColors),
+      ...(variantSkus ? { variantSkus: JSON.stringify(variantSkus) } : {}),
     },
   });
 
@@ -47,7 +48,7 @@ export async function createCatalogProduct(raw: unknown) {
 
 export async function updateCatalogProduct(id: string, raw: unknown) {
   await requireAdminSession();
-  const { availableSizes, availableColors, ...rest } = catalogProductSchema.partial().parse(raw);
+  const { availableSizes, availableColors, variantSkus, ...rest } = catalogProductSchema.partial().parse(raw);
 
   await prisma.catalogProduct.findUniqueOrThrow({ where: { id } });
 
@@ -57,6 +58,7 @@ export async function updateCatalogProduct(id: string, raw: unknown) {
       ...rest,
       ...(availableSizes !== undefined && { availableSizes: JSON.stringify(availableSizes) }),
       ...(availableColors !== undefined && { availableColors: JSON.stringify(availableColors) }),
+      ...(variantSkus !== undefined && { variantSkus: JSON.stringify(variantSkus) }),
     },
   });
 
