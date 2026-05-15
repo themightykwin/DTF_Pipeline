@@ -338,13 +338,15 @@ export default async function CartPage() {
                 Final pricing is confirmed at checkout. Shipping and applicable taxes may be added by Shopify.
               </p>
 
-              {/* Checkout — iterates all cart items and creates a Shopify draft order */}
+              {/* Checkout — syncs configs to Shopify then creates Storefront cart */}
               <CartCheckoutButton
                 configurationId={enriched[0]?.configuration.id ?? ''}
                 mode="checkout"
                 cartItems={enriched.map((i) => ({
                   cartItemId: i.id,
                   configurationId: i.configuration.id,
+                  quantities: i.quantities,
+                  selectedColors: i.selectedColors,
                 }))}
               />
             </div>

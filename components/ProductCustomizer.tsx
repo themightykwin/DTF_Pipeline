@@ -219,34 +219,50 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
     }
   }
 
-  /** Add to Cart — saves config then adds to staging cart; redirects to login if 401 */
+  /** Checkout — saves config, syncs to Shopify, creates cart, redirects to Shopify checkout */
   async function handleAddToCart() {
     if (!hasAnyDesign || totalUnits === 0) return;
     setCartState('adding');
     setCartError('');
     try {
+      // 1. Ensure config is saved
       const cfgId = configId ?? await saveConfiguration();
       if (!cfgId) { setCartState('error'); setCartError('Could not save configuration.'); return; }
 
-      const res = await fetch('/api/customer/cart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          configurationId: cfgId,
-          quantities,
-          selectedColors,
-        }),
-      });
-      if (res.status === 401) {
+      // 2. Check auth — redirect to login if not logged in
+      const meRes = await fetch('/api/customer/auth/me');
+      if (meRes.status === 401 || !meRes.ok) {
         window.location.href = `/account/login?redirect=${encodeURIComponent(window.location.pathname)}`;
         return;
       }
-      const json = await res.json() as { ok: boolean; error?: string };
-      if (json.ok) {
+
+      // 3. Call /api/checkout — syncs product to Shopify + creates Storefront cart
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cartItems: [{
+            configurationId: cfgId,
+            quantities,
+            selectedColors,
+          }],
+        }),
+      });
+
+      const json = await res.json() as {
+        ok: boolean;
+        data?: { checkoutUrl: string };
+        error?: string;
+        message?: string;
+      };
+
+      if (json.ok && json.data?.checkoutUrl) {
+        // Redirect to Shopify checkout
         setCartState('added');
+        window.location.href = json.data.checkoutUrl;
       } else {
         setCartState('error');
-        setCartError(json.error ?? 'Failed to add to cart.');
+        setCartError(json.message ?? json.error ?? 'Checkout unavailable. Please try again.');
       }
     } catch {
       setCartState('error');
@@ -702,15 +718,14 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                 }}
               >
                 {cartState === 'adding'
-                  ? 'Adding…'
+                  ? 'Preparing checkout…'
                   : cartState === 'added'
-                  ? '✓ Added to Cart'
-                  : 'Add to Cart'}
+                  ? '✓ Redirecting to Shopify…'
+                  : 'Add to Cart → Checkout'}
               </button>
               {cartState === 'added' && (
                 <p className="text-xs text-center font-medium" style={{ color: '#E8FF47' }}>
-                  ✓ In your cart —{' '}
-                  <a href="/account/cart" className="underline" style={{ color: '#E8FF47' }}>view cart</a>
+                  ✓ Redirecting to Shopify checkout…
                 </p>
               )}
               {cartState === 'error' && (
