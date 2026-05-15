@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadArtwork } from '@/lib/cloudinary';
+import { uploadArtwork, UPSCALE_MAX_MEGAPIXELS, UPSCALE_FACTOR } from '@/lib/cloudinary';
 import { prisma } from '@/lib/prisma';
 import { validateArtwork, DEFAULT_PRINT_RULES } from '@/lib/validation';
 import sharp from 'sharp';
@@ -66,6 +66,18 @@ export async function POST(req: NextRequest) {
         validation,
         // Flag if the image lacks transparency — caller can offer BG removal
         needsBgRemoval: !hasTransparency && !!process.env.REMOVE_BG_API_KEY,
+        // canUpscale: true when image is warn/fail, under 4.2MP, and ×4 would help
+        canUpscale: (() => {
+          if (validation.status === 'pass') return false;
+          const megapixels = (widthPx * heightPx) / 1_000_000;
+          if (megapixels >= UPSCALE_MAX_MEGAPIXELS) return false;
+          // Would the upscaled dimensions pass or at least reach warn?
+          const upscaledValidation = validateArtwork(
+            { widthPx: widthPx * UPSCALE_FACTOR, heightPx: heightPx * UPSCALE_FACTOR, mimeType: file.type },
+            rule
+          );
+          return upscaledValidation.status !== 'fail';
+        })(),
       },
     });
   } catch (e) {

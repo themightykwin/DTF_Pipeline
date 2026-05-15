@@ -54,6 +54,8 @@ interface SideState {
   validation: ValidationResult | null;
   needsBgRemoval: boolean;  // true when upload had no transparency
   isRemovingBg: boolean;    // true while remove.bg call is in flight
+  canUpscale: boolean;      // true when image is warn/fail and ×4 would help
+  isUpscaling: boolean;     // true while upscale call is in flight
 }
 
 const defaultSideState = (): SideState => ({
@@ -64,6 +66,8 @@ const defaultSideState = (): SideState => ({
   validation: null,
   needsBgRemoval: false,
   isRemovingBg: false,
+  canUpscale: false,
+  isUpscaling: false,
 });
 
 interface Props {
@@ -94,10 +98,10 @@ export default function DesignerModal({
 
   const [sides, setSides] = useState<Record<Side, SideState>>({
     front: initialDesign?.front
-      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false }
+      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false }
       : defaultSideState(),
     back: initialDesign?.back
-      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false }
+      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false }
       : defaultSideState(),
   });
 
@@ -275,6 +279,7 @@ export default function DesignerModal({
           storageUrl: string;
           validation: ValidationResult;
           needsBgRemoval: boolean;
+          canUpscale: boolean;
         };
       };
       if (json.ok) {
@@ -284,6 +289,8 @@ export default function DesignerModal({
           validation: json.data.validation,
           needsBgRemoval: json.data.needsBgRemoval ?? false,
           isRemovingBg: false,
+          canUpscale: json.data.canUpscale ?? false,
+          isUpscaling: false,
           transform: { ...DEFAULT_TRANSFORM },
         });
         setSelected(true);
@@ -317,6 +324,36 @@ export default function DesignerModal({
       }
     } catch {
       updateSide(side, { isRemovingBg: false });
+    }
+  }
+
+  // ── Upscale (Cloudinary e_upscale ×4) ──
+  async function handleUpscale(side: Side) {
+    const artUploadId = sides[side].artUploadId;
+    if (!artUploadId) return;
+    updateSide(side, { isUpscaling: true });
+    try {
+      const res = await fetch('/api/upload/upscale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artUploadId, garmentType: productType }),
+      });
+      const json = await res.json() as {
+        ok: boolean;
+        data?: { storageUrl: string; validation: ValidationResult; widthPx: number; heightPx: number };
+      };
+      if (json.ok && json.data) {
+        updateSide(side, {
+          artworkUrl: json.data.storageUrl,
+          validation: json.data.validation,
+          canUpscale: false,  // already upscaled — don't offer again
+          isUpscaling: false,
+        });
+      } else {
+        updateSide(side, { isUpscaling: false });
+      }
+    } catch {
+      updateSide(side, { isUpscaling: false });
     }
   }
 
@@ -487,6 +524,31 @@ export default function DesignerModal({
                           <span style={{ color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min DPI needed</span>
                           <span style={{ color: '#C0C0C0', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>300 DPI</span>
                         </div>
+                        {/* Upscale button — only when e_upscale would help */}
+                        {current.canUpscale && !current.isUpscaling && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpscale(activeSide)}
+                            style={{
+                              marginTop: '8px', width: '100%', padding: '7px 10px',
+                              borderRadius: '7px', border: 'none',
+                              background: accent, color: '#0A0A0A',
+                              fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                              transition: 'opacity 0.15s',
+                            }}
+                          >
+                            ✨ Upscale Image (×4 resolution)
+                          </button>
+                        )}
+                        {current.isUpscaling && (
+                          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <svg className="animate-spin" style={{ flexShrink: 0 }} width="14" height="14" viewBox="0 0 24 24" fill="none">
+                              <circle cx="12" cy="12" r="10" stroke={accent} strokeWidth="2.5" strokeOpacity="0.25" />
+                              <path d="M12 2a10 10 0 0 1 10 10" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+                            </svg>
+                            <span style={{ fontSize: '11px', color: accent, fontWeight: 600 }}>Upscaling… this may take a few seconds</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
