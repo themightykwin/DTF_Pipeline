@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCustomerSession } from '@/lib/customer-auth';
 import crypto from 'crypto';
 
-const DEMO_SHOP_DOMAIN = 'demo.dtfpipeline.com';
+const DEMO_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN ?? 'demo.dtfpipeline.com';
 
 const GARMENT_DEFAULTS: Record<string, { label: string; maxPrintWidthIn: number; maxPrintHeightIn: number }> = {
   tshirt:   { label: 'T-Shirt',  maxPrintWidthIn: 12, maxPrintHeightIn: 14 },

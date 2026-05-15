@@ -157,7 +157,7 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        shopDomain: 'demo.dtfpipeline.com',
+        shopDomain: process.env.NEXT_PUBLIC_SHOPIFY_SHOP_DOMAIN ?? 'demo.dtfpipeline.com',
         userId,
         garmentTemplateId: product.productType,
         artUploadId: design.front?.artUploadId ?? design.back?.artUploadId,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
 
-const DEMO_SHOP_DOMAIN = 'demo.dtfpipeline.com';
+const DEMO_SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN ?? 'demo.dtfpipeline.com';
 
 // Default print dimensions per garment type (inches)
 const GARMENT_DEFAULTS: Record<string, { label: string; maxPrintWidthIn: number; maxPrintHeightIn: number }> = {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       update: {},
       create: {
         id: userId,
-        email: `${userId}@demo.dtfpipeline.com`,
+        email: `${userId}@dtfpipeline.com`,
         name: 'Demo User',
       },
     });
