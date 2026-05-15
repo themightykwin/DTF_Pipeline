@@ -185,6 +185,16 @@ export async function POST(req: NextRequest) {
       };
     };
 
+    // Check for top-level errors (auth failures come back here, not in userErrors)
+    const topErrors = (productResult as unknown as { errors?: { message: string }[] }).errors;
+    if (topErrors?.length) {
+      console.error('[sync] Shopify top-level errors:', topErrors);
+      return NextResponse.json(
+        { ok: false, error: { code: 'SHOPIFY_AUTH_ERROR', message: `Shopify API error: ${topErrors[0].message}` } },
+        { status: 401 }
+      );
+    }
+
     const createErrors = productResult.data?.productCreate?.userErrors;
     if (createErrors?.length) {
       console.error('[sync] productCreate userErrors:', createErrors);
@@ -198,7 +208,7 @@ export async function POST(req: NextRequest) {
     if (!shopifyProduct) {
       console.error('[sync] productCreate returned no product — full result:', JSON.stringify(productResult));
       return NextResponse.json(
-        { ok: false, error: { code: 'NO_PRODUCT', message: 'Shopify returned no product.' } },
+        { ok: false, error: { code: 'NO_PRODUCT', message: 'Shopify returned no product. The Admin API token may be invalid — ensure it starts with shpat_ and has write_products scope.' } },
         { status: 500 }
       );
     }
