@@ -258,8 +258,8 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
 
   return (
     <>
-      <div style={{ padding: '40px', maxWidth: '1100px' }}>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div style={{ padding: '40px', maxWidth: '1400px' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-10">
 
           {/* ── LEFT: Image preview + thumbnails ── */}
           <div className="flex flex-col gap-3">
@@ -407,7 +407,7 @@ export default function ProductCustomizer({ product, savedConfig }: { product: P
                       key={img.id}
                       onClick={() => handleThumbnailClick(i)}
                       title={img.altText ?? undefined}
-                      className="flex-shrink-0 w-16 h-16 overflow-hidden transition-all"
+                      className="flex-shrink-0 w-24 h-24 overflow-hidden transition-all"
                       style={{
                         background: '#0D0D0D',
                         border: `2px solid ${isActive ? '#E8FF47' : '#2A2A2A'}`,
