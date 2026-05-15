@@ -7,16 +7,22 @@ import { requireAdminSession } from '@/lib/admin-auth';
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
+const colorSchema = z.object({
+  label: z.string(),
+  hex: z.string(),
+  sku: z.string().optional(),   // per-color SKU override
+});
+
 const catalogProductSchema = z.object({
-  shopId: z.string().cuid(),
+  shopId: z.string().cuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']),
   availableSizes: z.array(z.string()).min(1),
-  availableColors: z.array(
-    z.object({ label: z.string(), hex: z.string() })
-  ),
+  availableColors: z.array(colorSchema),
   basePriceCents: z.number().int().min(0),
+  costCents: z.number().int().min(0).default(0),
+  variantSkus: z.record(z.string(), z.string()).optional(), // { "Color|Size": "SKU" }
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
   sortOrder: z.number().int().default(0),
 });
@@ -25,13 +31,14 @@ const catalogProductSchema = z.object({
 
 export async function createCatalogProduct(raw: unknown) {
   await requireAdminSession();
-  const data = catalogProductSchema.parse(raw);
+  const { availableSizes, availableColors, variantSkus, ...rest } = catalogProductSchema.parse(raw);
 
   const product = await prisma.catalogProduct.create({
     data: {
-      ...data,
-      availableSizes: JSON.stringify(data.availableSizes),
-      availableColors: JSON.stringify(data.availableColors),
+      ...rest,
+      availableSizes: JSON.stringify(availableSizes),
+      availableColors: JSON.stringify(availableColors),
+      ...(variantSkus ? { variantSkus: JSON.stringify(variantSkus) } : {}),
     },
   });
 
@@ -41,17 +48,17 @@ export async function createCatalogProduct(raw: unknown) {
 
 export async function updateCatalogProduct(id: string, raw: unknown) {
   await requireAdminSession();
-  const data = catalogProductSchema.partial().parse(raw);
+  const { availableSizes, availableColors, variantSkus, ...rest } = catalogProductSchema.partial().parse(raw);
 
-  // Verify product exists (scoped check not strictly needed for admin, but safe)
   await prisma.catalogProduct.findUniqueOrThrow({ where: { id } });
 
   const product = await prisma.catalogProduct.update({
     where: { id },
     data: {
-      ...data,
-      ...(data.availableSizes && { availableSizes: JSON.stringify(data.availableSizes) }),
-      ...(data.availableColors && { availableColors: JSON.stringify(data.availableColors) }),
+      ...rest,
+      ...(availableSizes !== undefined && { availableSizes: JSON.stringify(availableSizes) }),
+      ...(availableColors !== undefined && { availableColors: JSON.stringify(availableColors) }),
+      ...(variantSkus !== undefined && { variantSkus: JSON.stringify(variantSkus) }),
     },
   });
 
@@ -75,7 +82,6 @@ export async function addCatalogProductImage(
   await requireAdminSession();
   await prisma.catalogProduct.findUniqueOrThrow({ where: { id: catalogProductId } });
 
-  // If marking as featured, unset others first
   if (data.isFeatured) {
     await prisma.catalogProductImage.updateMany({
       where: { catalogProductId },

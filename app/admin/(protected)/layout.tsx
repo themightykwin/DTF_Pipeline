@@ -8,9 +8,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   await requireAdminSession();
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#0A0A0A' }}>
       <AdminSidebar />
-      <main className="flex-1 p-8 overflow-auto">{children}</main>
+      <main style={{ flex: 1, padding: '32px', overflowY: 'auto', color: '#F5F5F5' }}>{children}</main>
     </div>
   );
 }

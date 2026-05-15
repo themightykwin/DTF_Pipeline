@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 480" fill="none">
+  <!-- T-Shirt body -->
+  <g id="garment">
+    <!-- Main body -->
+    <path d="M120 80 L60 140 L100 160 L100 400 L300 400 L300 160 L340 140 L280 80 Q260 60 240 58 Q220 100 200 100 Q180 100 160 58 Q140 60 120 80 Z"
+      fill="#f0f0f0" stroke="#d0d0d0" stroke-width="1.5"/>
+    <!-- Left sleeve -->
+    <path d="M120 80 L60 140 L100 160 L130 120 Z"
+      fill="#e8e8e8" stroke="#d0d0d0" stroke-width="1.5"/>
+    <!-- Right sleeve -->
+    <path d="M280 80 L340 140 L300 160 L270 120 Z"
+      fill="#e8e8e8" stroke="#d0d0d0" stroke-width="1.5"/>
+    <!-- Collar shadow -->
+    <path d="M160 58 Q180 100 200 100 Q220 100 240 58" fill="none" stroke="#c0c0c0" stroke-width="2"/>
+    <!-- Subtle fold lines -->
+    <path d="M170 200 Q180 280 175 380" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="none"/>
+    <path d="M230 200 Q220 280 225 380" stroke="#e0e0e0" stroke-width="1"/>
+  </g>
+  <!-- Print area guide (invisible, just defines region) -->
+  <rect id="print-area" x="145" y="140" width="110" height="150" fill="none"/>
+</svg>

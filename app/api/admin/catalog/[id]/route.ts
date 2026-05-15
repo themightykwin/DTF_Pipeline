@@ -27,8 +27,10 @@ const patchSchema = z.object({
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']).optional(),
   availableSizes: z.array(z.string()).optional(),
-  availableColors: z.array(z.object({ label: z.string(), hex: z.string() })).optional(),
+  availableColors: z.array(z.object({ label: z.string(), hex: z.string(), sku: z.string().optional() })).optional(),
   basePriceCents: z.number().int().min(0).optional(),
+  costCents: z.number().int().min(0).optional(),
+  skuPrefix: z.string().optional(),
   status: z.enum(['draft', 'active', 'archived']).optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -38,14 +40,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json();
-  const data = patchSchema.parse(body);
+  const { availableSizes, availableColors, ...rest } = patchSchema.parse(body);
 
   const product = await prisma.catalogProduct.update({
     where: { id: params.id },
     data: {
-      ...data,
-      ...(data.availableSizes && { availableSizes: JSON.stringify(data.availableSizes) }),
-      ...(data.availableColors && { availableColors: JSON.stringify(data.availableColors) }),
+      ...rest,
+      ...(availableSizes !== undefined && { availableSizes: JSON.stringify(availableSizes) }),
+      ...(availableColors !== undefined && { availableColors: JSON.stringify(availableColors) }),
     },
   });
 

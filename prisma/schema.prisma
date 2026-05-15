@@ -26,7 +26,8 @@ model Shop {
   orders           Order[]
   webhookEvents    WebhookEvent[]
   auditLogs        AuditLog[]
-  catalogProducts  CatalogProduct[]
+  catalogProducts   CatalogProduct[]
+  configurations    ProductConfiguration[]
 
   @@map("shops")
 }
@@ -105,6 +106,7 @@ model User {
   id           String    @id @default(cuid())
   email        String    @unique
   name         String?
+  passwordHash String?   // null for OAuth-only / demo users
   status       String    @default("active")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -113,8 +115,26 @@ model User {
   artUploads     ArtUpload[]
   configurations ProductConfiguration[]
   draftOrders    DraftOrder[]
+  cartItems      CartItem[]
 
   @@map("users")
+}
+
+// ─── Shopping cart ─────────────────────────────────────────────────────────
+model CartItem {
+  id              String   @id @default(cuid())
+  userId          String
+  configurationId String
+  quantities      String   // JSON: { colorLabel: { size: qty } }
+  selectedColors  String   // JSON: string[]
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id])
+  configuration ProductConfiguration @relation(fields: [configurationId], references: [id])
+
+  @@map("cart_items")
 }
 
 // ─── Mapping buyer → Shopify customer ─────────────────────────────────────
@@ -136,7 +156,7 @@ model ShopCustomer {
 // ─── Garment types and print rules ────────────────────────────────────────
 model GarmentTemplate {
   id               String  @id @default(cuid())
-  garmentType      String  // tshirt | hoodie | crewneck
+  garmentType      String  @unique // tshirt | hoodie | crewneck
   label            String
   availableSizes   String  // JSON array e.g. ["XXS","XS","S","M","L","XL","2X","3X","4X","5X"]
   maxPrintWidthIn  Float
@@ -174,14 +194,16 @@ model ArtUpload {
 // ─── Admin-managed catalog products ───────────────────────────────────────
 model CatalogProduct {
   id              String   @id @default(cuid())
-  shopId          String
-  shop            Shop     @relation(fields: [shopId], references: [id])
+  shopId          String?
+  shop            Shop?    @relation(fields: [shopId], references: [id])
   title           String
   description     String?
   productType     String   // e.g. "tshirt" | "hoodie" | "crewneck"
   availableSizes  String   // JSON array ["S","M","L","XL"]
   availableColors String   // JSON array [{"label":"White","hex":"#ffffff"},...]
   basePriceCents  Int      @default(0)
+  costCents       Int      @default(0)  // production cost per unit
+  variantSkus     String?              // JSON map {"Color|Size": "SKU-VALUE"} for per-variant SKU lookup
   status          String   @default("draft") // draft | active | archived
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
@@ -190,7 +212,7 @@ model CatalogProduct {
   images         CatalogProductImage[]
   configurations ProductConfiguration[]
 
-  @@index([shopId, status])
+  @@index([status])
   @@map("catalog_products")
 }
 
@@ -231,12 +253,14 @@ model ProductConfiguration {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  shop            Shop            @relation(fields: [shopId], references: [id])
   user            User            @relation(fields: [userId], references: [id])
   garmentTemplate GarmentTemplate @relation(fields: [garmentTemplateId], references: [id])
   artUpload       ArtUpload?      @relation(fields: [artUploadId], references: [id])
   catalogProduct  CatalogProduct? @relation(fields: [catalogProductId], references: [id])
   shopifyProduct  ShopifyProduct?
   draftOrders     DraftOrder[]
+  cartItems       CartItem[]
 
   @@index([shopId, userId])
   @@index([shopId, status])

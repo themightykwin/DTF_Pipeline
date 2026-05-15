@@ -33,14 +33,22 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, products });
 }
 
+const colorSchema = z.object({
+  label: z.string(),
+  hex: z.string(),
+  sku: z.string().optional(),   // per-color SKU override
+});
+
 const createSchema = z.object({
   shopId: z.string().cuid(),
   title: z.string().min(1),
   description: z.string().optional(),
   productType: z.enum(['tshirt', 'hoodie', 'crewneck']),
   availableSizes: z.array(z.string()),
-  availableColors: z.array(z.object({ label: z.string(), hex: z.string() })),
+  availableColors: z.array(colorSchema),
   basePriceCents: z.number().int().min(0).default(0),
+  costCents: z.number().int().min(0).default(0),
+  skuPrefix: z.string().optional(),
   status: z.enum(['draft', 'active', 'archived']).default('draft'),
 });
 
@@ -52,11 +60,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const data = createSchema.parse(body);
 
+  const { availableSizes, availableColors, ...rest } = data;
   const product = await prisma.catalogProduct.create({
     data: {
-      ...data,
-      availableSizes: JSON.stringify(data.availableSizes),
-      availableColors: JSON.stringify(data.availableColors),
+      ...rest,
+      availableSizes: JSON.stringify(availableSizes),
+      availableColors: JSON.stringify(availableColors),
     },
   });
 
