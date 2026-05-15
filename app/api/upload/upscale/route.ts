@@ -83,9 +83,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // After upscaling, check if BG removal should now be offered
+    // (e_upscale always outputs PNG so hasTransparency is preserved from original)
+    const needsBgRemoval = !artUpload.hasTransparency && !!process.env.REMOVE_BG_API_KEY;
+
     return NextResponse.json({
       ok: true,
-      data: { storageUrl: newUrl, widthPx: newW, heightPx: newH, validation },
+      data: { storageUrl: newUrl, widthPx: newW, heightPx: newH, validation, needsBgRemoval },
     });
 
   } catch (e) {

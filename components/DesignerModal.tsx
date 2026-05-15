@@ -316,8 +316,10 @@ export default function DesignerModal({
       if (json.ok && json.data?.storageUrl) {
         updateSide(side, {
           artworkUrl: json.data.storageUrl,
-          needsBgRemoval: false,
+          needsBgRemoval: false, // BG removed — never offer again
           isRemovingBg: false,
+          canUpscale: false,     // upscale (if it happened) is already done; don't re-offer
+          isUpscaling: false,
         });
       } else {
         updateSide(side, { isRemovingBg: false });
@@ -340,14 +342,17 @@ export default function DesignerModal({
       });
       const json = await res.json() as {
         ok: boolean;
-        data?: { storageUrl: string; validation: ValidationResult; widthPx: number; heightPx: number };
+        data?: { storageUrl: string; validation: ValidationResult; widthPx: number; heightPx: number; needsBgRemoval: boolean };
       };
       if (json.ok && json.data) {
         updateSide(side, {
           artworkUrl: json.data.storageUrl,
           validation: json.data.validation,
-          canUpscale: false,  // already upscaled — don't offer again
+          canUpscale: false,         // upscale done — never offer again
           isUpscaling: false,
+          // Now offer BG removal if the upscaled image still lacks transparency
+          needsBgRemoval: json.data.needsBgRemoval ?? false,
+          isRemovingBg: false,
         });
       } else {
         updateSide(side, { isUpscaling: false });
@@ -431,8 +436,68 @@ export default function DesignerModal({
               </div>
               <UploadZone onUpload={handleUpload} isUploading={isUploading} />
 
-              {/* BG removal banner — shown when upload has no transparency */}
-              {current.needsBgRemoval && !current.isRemovingBg && (
+              {/* ── Step 1: Upscale (shown first when resolution is too low) ── */}
+              {current.canUpscale && !current.isUpscaling && (
+                <div style={{
+                  background: 'rgba(250,204,21,0.08)',
+                  border: '1px solid rgba(250,204,21,0.25)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#facc15', marginBottom: '4px' }}>
+                    Image resolution too low
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '10px' }}>
+                    Upscale your image 4× with AI before printing for sharper results. This is recommended before background removal.
+                  </p>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleUpscale(activeSide)}
+                      style={{
+                        flex: 1, padding: '7px 10px', borderRadius: '7px', border: 'none',
+                        background: '#facc15', color: '#0A0A0A', fontSize: '11px',
+                        fontWeight: 700, cursor: 'pointer', transition: 'background 0.15s',
+                      }}
+                    >
+                      ✨ Upscale Image (×4)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSide(activeSide, { canUpscale: false })}
+                      style={{
+                        padding: '7px 10px', borderRadius: '7px',
+                        border: '1px solid #333', background: 'transparent',
+                        color: '#666', fontSize: '11px', cursor: 'pointer',
+                      }}
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Spinner while upscaling */}
+              {current.isUpscaling && (
+                <div style={{
+                  background: 'rgba(250,204,21,0.06)',
+                  border: '1px solid rgba(250,204,21,0.15)',
+                  borderRadius: '10px',
+                  padding: '14px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}>
+                  <svg className="animate-spin" style={{ flexShrink: 0 }} width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#facc15" strokeWidth="2.5" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="#facc15" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                  <p style={{ fontSize: '11px', color: '#facc15', fontWeight: 600 }}>Upscaling… this may take a few seconds</p>
+                </div>
+              )}
+
+              {/* ── Step 2: BG removal (shown after upscale, or if no upscale needed) ── */}
+              {current.needsBgRemoval && !current.isRemovingBg && !current.canUpscale && !current.isUpscaling && (
                 <div style={{
                   background: 'rgba(232,255,71,0.08)',
                   border: '1px solid rgba(232,255,71,0.25)',
@@ -491,6 +556,7 @@ export default function DesignerModal({
                 </div>
               )}
 
+              {/* ── Validation card (stats only — no action buttons inside) ── */}
               {current.validation && (() => {
                 const v = current.validation!;
                 const isPass = v.status === 'pass';
@@ -503,7 +569,7 @@ export default function DesignerModal({
                     <p style={{ fontSize: '11px', fontWeight: 700, color: accent, marginBottom: '3px' }}>
                       {isPass ? '✓' : isWarn ? '⚠' : '✕'} {v.summary}
                     </p>
-                    <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '8px' }}>
+                    <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: isPass ? 0 : '8px' }}>
                       {v.detail}
                     </p>
                     {!isPass && (
@@ -524,31 +590,6 @@ export default function DesignerModal({
                           <span style={{ color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min DPI needed</span>
                           <span style={{ color: '#C0C0C0', fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>300 DPI</span>
                         </div>
-                        {/* Upscale button — only when e_upscale would help */}
-                        {current.canUpscale && !current.isUpscaling && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpscale(activeSide)}
-                            style={{
-                              marginTop: '8px', width: '100%', padding: '7px 10px',
-                              borderRadius: '7px', border: 'none',
-                              background: accent, color: '#0A0A0A',
-                              fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-                              transition: 'opacity 0.15s',
-                            }}
-                          >
-                            ✨ Upscale Image (×4 resolution)
-                          </button>
-                        )}
-                        {current.isUpscaling && (
-                          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <svg className="animate-spin" style={{ flexShrink: 0 }} width="14" height="14" viewBox="0 0 24 24" fill="none">
-                              <circle cx="12" cy="12" r="10" stroke={accent} strokeWidth="2.5" strokeOpacity="0.25" />
-                              <path d="M12 2a10 10 0 0 1 10 10" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
-                            </svg>
-                            <span style={{ fontSize: '11px', color: accent, fontWeight: 600 }}>Upscaling… this may take a few seconds</span>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
