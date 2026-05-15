@@ -65,7 +65,9 @@ export async function POST(req: NextRequest) {
         storageUrl: url,
         validation,
         // Flag if the image lacks transparency — caller can offer BG removal
-        needsBgRemoval: !hasTransparency && !!process.env.REMOVE_BG_API_KEY,
+        // Show BG removal banner whenever the image lacks transparency —
+        // don't gate on API key here; fail gracefully at click time instead
+        needsBgRemoval: !hasTransparency,
         // canUpscale: true when image is warn/fail, under 4.2MP, and ×4 would help
         canUpscale: (() => {
           if (validation.status === 'pass') return false;

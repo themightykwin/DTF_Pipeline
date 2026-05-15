@@ -56,6 +56,7 @@ interface SideState {
   isRemovingBg: boolean;    // true while remove.bg call is in flight
   canUpscale: boolean;      // true when image is warn/fail and ×4 would help
   isUpscaling: boolean;     // true while upscale call is in flight
+  bgRemovalError: string | null; // error message if remove.bg call fails
 }
 
 const defaultSideState = (): SideState => ({
@@ -68,6 +69,7 @@ const defaultSideState = (): SideState => ({
   isRemovingBg: false,
   canUpscale: false,
   isUpscaling: false,
+  bgRemovalError: null,
 });
 
 interface Props {
@@ -98,10 +100,10 @@ export default function DesignerModal({
 
   const [sides, setSides] = useState<Record<Side, SideState>>({
     front: initialDesign?.front
-      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false }
+      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false, bgRemovalError: null }
       : defaultSideState(),
     back: initialDesign?.back
-      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false }
+      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false, canUpscale: false, isUpscaling: false, bgRemovalError: null }
       : defaultSideState(),
   });
 
@@ -291,6 +293,7 @@ export default function DesignerModal({
           isRemovingBg: false,
           canUpscale: json.data.canUpscale ?? false,
           isUpscaling: false,
+          bgRemovalError: null,
           transform: { ...DEFAULT_TRANSFORM },
         });
         setSelected(true);
@@ -312,20 +315,27 @@ export default function DesignerModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ artUploadId }),
       });
-      const json = await res.json() as { ok: boolean; data?: { storageUrl: string } };
+      const json = await res.json() as { ok: boolean; data?: { storageUrl: string }; error?: { message: string } };
       if (json.ok && json.data?.storageUrl) {
         updateSide(side, {
           artworkUrl: json.data.storageUrl,
-          needsBgRemoval: false, // BG removed — never offer again
+          needsBgRemoval: false,
           isRemovingBg: false,
-          canUpscale: false,     // upscale (if it happened) is already done; don't re-offer
+          canUpscale: false,
           isUpscaling: false,
+          bgRemovalError: null,
         });
       } else {
-        updateSide(side, { isRemovingBg: false });
+        updateSide(side, {
+          isRemovingBg: false,
+          bgRemovalError: json.error?.message ?? 'Background removal failed. Please try again.',
+        });
       }
     } catch {
-      updateSide(side, { isRemovingBg: false });
+      updateSide(side, {
+        isRemovingBg: false,
+        bgRemovalError: 'Background removal failed. Please try again.',
+      });
     }
   }
 
@@ -534,6 +544,11 @@ export default function DesignerModal({
                       Keep as-is
                     </button>
                   </div>
+                  {current.bgRemovalError && (
+                    <p style={{ fontSize: '11px', color: '#f87171', marginTop: '8px', lineHeight: 1.4 }}>
+                      ⚠ {current.bgRemovalError}
+                    </p>
+                  )}
                 </div>
               )}
 
