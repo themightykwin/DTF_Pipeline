@@ -52,6 +52,8 @@ interface SideState {
   transform: ArtworkTransform;
   artAspect: number;
   validation: ValidationResult | null;
+  needsBgRemoval: boolean;  // true when upload had no transparency
+  isRemovingBg: boolean;    // true while remove.bg call is in flight
 }
 
 const defaultSideState = (): SideState => ({
@@ -60,6 +62,8 @@ const defaultSideState = (): SideState => ({
   transform: { ...DEFAULT_TRANSFORM },
   artAspect: 1,
   validation: null,
+  needsBgRemoval: false,
+  isRemovingBg: false,
 });
 
 interface Props {
@@ -90,10 +94,10 @@ export default function DesignerModal({
 
   const [sides, setSides] = useState<Record<Side, SideState>>({
     front: initialDesign?.front
-      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null }
+      ? { artworkUrl: initialDesign.front.artworkUrl, artUploadId: initialDesign.front.artUploadId, transform: initialDesign.front.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false }
       : defaultSideState(),
     back: initialDesign?.back
-      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null }
+      ? { artworkUrl: initialDesign.back.artworkUrl, artUploadId: initialDesign.back.artUploadId, transform: initialDesign.back.transform, artAspect: 1, validation: null, needsBgRemoval: false, isRemovingBg: false }
       : defaultSideState(),
   });
 
@@ -264,19 +268,55 @@ export default function DesignerModal({
       fd.append('userId', 'demo-user');
       fd.append('garmentType', productType);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const json = await res.json() as { ok: boolean; data: { artUploadId: string; storageUrl: string; validation: ValidationResult } };
+      const json = await res.json() as {
+        ok: boolean;
+        data: {
+          artUploadId: string;
+          storageUrl: string;
+          validation: ValidationResult;
+          needsBgRemoval: boolean;
+        };
+      };
       if (json.ok) {
         updateSide(side, {
           artworkUrl: json.data.storageUrl,
           artUploadId: json.data.artUploadId,
           validation: json.data.validation,
+          needsBgRemoval: json.data.needsBgRemoval ?? false,
+          isRemovingBg: false,
           transform: { ...DEFAULT_TRANSFORM },
         });
         setSelected(true);
-        setPanelOpen(false);
+        setPanelOpen(true); // keep panel open so banner is visible
       }
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  // ── Remove background (opt-in) ──
+  async function handleRemoveBg(side: Side) {
+    const artUploadId = sides[side].artUploadId;
+    if (!artUploadId) return;
+    updateSide(side, { isRemovingBg: true });
+    try {
+      const res = await fetch('/api/upload/remove-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ artUploadId }),
+      });
+      const json = await res.json() as { ok: boolean; data?: { storageUrl: string } };
+      if (json.ok && json.data?.storageUrl) {
+        updateSide(side, {
+          artworkUrl: json.data.storageUrl,
+          needsBgRemoval: false,
+          isRemovingBg: false,
+        });
+      } else {
+        updateSide(side, { isRemovingBg: false });
+      }
+    } catch {
+      updateSide(side, { isRemovingBg: false });
     }
   }
 
@@ -353,6 +393,67 @@ export default function DesignerModal({
                 </p>
               </div>
               <UploadZone onUpload={handleUpload} isUploading={isUploading} />
+
+              {/* BG removal banner — shown when upload has no transparency */}
+              {current.needsBgRemoval && !current.isRemovingBg && (
+                <div style={{
+                  background: 'rgba(232,255,71,0.08)',
+                  border: '1px solid rgba(232,255,71,0.25)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                }}>
+                  <p style={{ fontSize: '11px', fontWeight: 700, color: '#E8FF47', marginBottom: '4px' }}>
+                    No transparent background detected
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#999', lineHeight: 1.5, marginBottom: '10px' }}>
+                    Your image has a solid background. For best DTF results, remove it so only your design prints on the garment.
+                  </p>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveBg(activeSide)}
+                      style={{
+                        flex: 1, padding: '7px 10px', borderRadius: '7px', border: 'none',
+                        background: '#E8FF47', color: '#0A0A0A', fontSize: '11px',
+                        fontWeight: 700, cursor: 'pointer', transition: 'background 0.15s',
+                      }}
+                    >
+                      Remove Background
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateSide(activeSide, { needsBgRemoval: false })}
+                      style={{
+                        padding: '7px 10px', borderRadius: '7px',
+                        border: '1px solid #333', background: 'transparent',
+                        color: '#666', fontSize: '11px', cursor: 'pointer',
+                      }}
+                    >
+                      Keep as-is
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Spinner while BG removal is running */}
+              {current.isRemovingBg && (
+                <div style={{
+                  background: 'rgba(232,255,71,0.06)',
+                  border: '1px solid rgba(232,255,71,0.15)',
+                  borderRadius: '10px',
+                  padding: '14px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}>
+                  <svg className="animate-spin" style={{ flexShrink: 0 }} width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#E8FF47" strokeWidth="2.5" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="#E8FF47" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                  <p style={{ fontSize: '11px', color: '#E8FF47', fontWeight: 600 }}>Removing background…</p>
+                </div>
+              )}
+
               {current.validation && (
                 <div className={`rounded-xl p-3 text-xs ${
                   current.validation.status === 'pass' ? 'bg-green-900/30 text-green-400'

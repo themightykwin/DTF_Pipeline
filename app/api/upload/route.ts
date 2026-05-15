@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
         artUploadId: artUpload.id,
         storageUrl: url,
         validation,
+        // Flag if the image lacks transparency — caller can offer BG removal
+        needsBgRemoval: !hasTransparency && !!process.env.REMOVE_BG_API_KEY,
       },
     });
   } catch (e) {
